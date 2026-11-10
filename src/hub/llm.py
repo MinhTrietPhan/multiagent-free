@@ -1,21 +1,27 @@
 
-"""One place that creates the LLM, so swapping provider/model later touches only this file."""
+"""Create Gemini models."""
+
 import os
 
-from .config import MODEL, TEMPERATURE
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from .config import MODEL_POOL, TEMPERATURE
 
 
-def get_llm():
+def get_llm_models():
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
     if not api_key:
-        raise RuntimeError("Chưa có GOOGLE_API_KEY hoặc GEMINI_API_KEY.")
+        raise RuntimeError(
+            "Chưa có GOOGLE_API_KEY hoặc GEMINI_API_KEY."
+        )
 
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
-    return ChatGoogleGenerativeAI(
-        model=MODEL,
-        temperature=TEMPERATURE,
-        google_api_key=api_key,
-        api_version="v1beta",
-    )
+    return [
+        ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=TEMPERATURE,
+            google_api_key=api_key,
+            api_version="v1beta",
+        )
+        for model_name in MODEL_POOL
+    ]

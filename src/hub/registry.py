@@ -3,7 +3,4 @@ from .agents.base import AgentSpec
 from .agents.context import SPEC as context_spec
 from .agents.qa import SPEC as qa_spec
 
-AGENTS: list[AgentSpec] = [
-    context_spec,
-    qa_spec,
-]
+AGENTS: list[AgentSpec] = [qa_spec, context_spec]

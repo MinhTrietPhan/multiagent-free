@@ -4,7 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from .agents.base import AgentSpec
-from .llm import get_llm
+from .model_router import get_llm
 from .registry import AGENTS
 from .state import HubState
 from .supervisor import make_supervisor

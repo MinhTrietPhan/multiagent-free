@@ -8,3 +8,4 @@ from langgraph.graph.message import add_messages
 class HubState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     next: str   # agent chosen by the supervisor
+    forced: str | None  # <-- thêm: agent do người dùng chọn thẳng

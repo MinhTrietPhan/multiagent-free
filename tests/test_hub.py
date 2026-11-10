@@ -5,6 +5,7 @@ from hub import build_hub
 from hub.agents.base import AgentSpec
 from hub.agents.context import SPEC as context_spec
 from hub.cli import run_turn
+from hub.cli import parse_route
 
 
 class FakeLLM:
@@ -35,7 +36,7 @@ def test_single_agent_no_llm_call_and_menu(tmp_path, monkeypatch):
     reply = run_turn(app, "tạo context cho dự án .", cfg, ask=lambda _: "1", say=said.append)
     assert "Nhập 1/2/3" in said[0]            # asked the fixed menu
     assert "mode=map" in reply
-    assert "def f()" in (tmp_path / "PROJECT_CONTEXT.md").read_text()
+    assert "def f()" in (tmp_path / "PROJECT_CONTEXT_map.md").read_text()
 
 
 def test_mode_keyword_skips_menu(tmp_path, monkeypatch):
@@ -54,3 +55,15 @@ def test_adding_second_agent_routes_by_llm(tmp_path, monkeypatch):
     app = build_hub([context_spec, echo], llm_factory=lambda: llm)
     out = app.invoke({"messages": [HumanMessage("hãy echo giúp tôi")]}, {"configurable": {"thread_id": "t3"}})
     assert out["messages"][-1].content == "echo-agent reply" and llm.calls == 1
+
+
+def test_parse_route():
+    assert parse_route('/qa hàm nào train?', ['context', 'qa']) == ('qa', 'hàm nào train?')
+    assert parse_route('tạo context', ['context', 'qa']) == (None, 'tạo context')
+
+def test_forced_agent_skips_llm(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    echo = AgentSpec('echo', 'Lặp lại', _echo)
+    app = build_hub([context_spec, echo], llm_factory=lambda: (_ for _ in ()).throw(AssertionError('LLM called')))
+    cfg = {'configurable': {'thread_id': 't4'}}
+    assert run_turn(app, 'hi', cfg, forced='echo') == 'echo-agent reply'
