@@ -91,7 +91,7 @@ def renderer_node(state: State) -> dict:
             parts += ["", f"### {f}  [SKELETON]", "```text", body, "```"]
 
     body = "\n".join(parts)
-    head = ["# Project context: " + root.name]
+    head = ["# Project context: " + root.name, f"> Root: `{root}`"]
     sha = git_head(str(root))
     meta = [f"mode={state.get('mode')}", f"files={len(files)}", f"full_code={len(full)}"]
     if sha:

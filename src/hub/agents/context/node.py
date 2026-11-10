@@ -31,9 +31,9 @@ def _last_user_text(state) -> str:
 
 def _find_dir(text: str) -> str | None:
     for tok in re.findall(r"[\w./~\\:-]+", text):
-        tok = tok.rstrip(".,:;")
-        if tok and Path(tok).expanduser().is_dir():
-            return str(Path(tok).expanduser())
+        cleaned = tok.rstrip(",:;")          # keep trailing "." (it means cwd)
+        if cleaned and Path(cleaned).expanduser().is_dir():
+            return str(Path(cleaned).expanduser().resolve())
     return None
 
 
