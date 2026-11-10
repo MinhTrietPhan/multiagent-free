@@ -1,0 +1,74 @@
+"""Hub-facing wrapper of the context agent: parse the request, ask the fixed menu if needed, run, reply."""
+import re
+from pathlib import Path
+
+from langchain_core.messages import AIMessage
+from langgraph.types import interrupt
+
+from .graph import build_context
+from .tools.tokens import count_tokens
+
+MENU = """Bạn muốn mức ngữ cảnh nào?
+  1. map       Bản đồ nhanh (cây thư mục + skeleton)
+  2. balanced  Cân bằng (bản đồ + full code vài file chính)
+  3. full      Đầy đủ (toàn bộ code, đã bỏ comment/output notebook)
+Nhập 1/2/3 (mặc định 2):"""
+
+_MODE_KEYWORDS = {
+    "map": ("map", "tổng quan", "bản đồ", "skeleton"),
+    "full": ("full", "đầy đủ", "toàn bộ"),
+    "balanced": ("balanced", "cân bằng"),
+}
+OUTPUT_FILE = "PROJECT_CONTEXT.md"
+
+
+def _last_user_text(state) -> str:
+    for m in reversed(state.get("messages", [])):
+        if getattr(m, "type", "") == "human":
+            return m.content if isinstance(m.content, str) else str(m.content)
+    return ""
+
+
+def _find_dir(text: str) -> str | None:
+    for tok in re.findall(r"[\w./~\\:-]+", text):
+        tok = tok.rstrip(".,:;")
+        if tok and Path(tok).expanduser().is_dir():
+            return str(Path(tok).expanduser())
+    return None
+
+
+def _find_mode(text: str) -> str | None:
+    low = text.lower()
+    for mode, kws in _MODE_KEYWORDS.items():
+        if any(re.search(rf"\b{re.escape(k)}\b", low) for k in kws):
+            return mode
+    return None
+
+
+CANCEL = {"0", "q", "exit", "huỷ", "huy", "cancel"}
+
+
+def context_node(state) -> dict:
+    text = _last_user_text(state)
+
+    root = _find_dir(text)
+    if root is None:
+        ans = str(interrupt("Dự án nằm ở đâu? Nhập đường dẫn thư mục (gõ . cho thư mục hiện tại, 0 để huỷ):")).strip().strip('"')
+        if ans.lower() in CANCEL:
+            return {"messages": [AIMessage("Đã huỷ, không tạo file.")]}
+        if not Path(ans).expanduser().is_dir():
+            return {"messages": [AIMessage(f"Không tìm thấy thư mục: {ans}")]}
+        root = str(Path(ans).expanduser())
+
+    mode = _find_mode(text)
+    if mode is None:
+        choice = str(interrupt(MENU)).strip().lower()
+        if choice in CANCEL:
+            return {"messages": [AIMessage("Đã huỷ, không tạo file.")]}
+        mode = {"1": "map", "2": "balanced", "3": "full"}.get(choice, choice if choice in _MODE_KEYWORDS else "balanced")
+
+    out = build_context(root, mode)
+    Path(OUTPUT_FILE).write_text(out, encoding="utf-8")
+    msg = f"Đã tạo `{OUTPUT_FILE}` từ `{Path(root).resolve()}` (mode={mode}, ~{count_tokens(out):,} token). " \
+          f"Bạn đưa file này cho chatbot khác là dùng được."
+    return {"messages": [AIMessage(msg)]}
