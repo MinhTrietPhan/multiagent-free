@@ -1,8 +1,7 @@
 from pathlib import Path
 from hub.agents.context.config import output_filename
 from hub.agents.context.graph import build_context
-MENU = '\nChọn mức ngữ cảnh:\n  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n  2. balanced  Cân bằng (bản đồ + full code vài file chính)\n  3. full      Đầy đủ (toàn bộ code, đã bỏ comment/output notebook)\n'
-
+MENU = '\nChọn mức ngữ cảnh:\n  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n  2. balanced  Cân bằng (bản đồ + full code vài file chính)\n  3. full      Đầy đủ (toàn bộ code, giữ comment, bỏ output notebook)\n'
 
 def main():
     print('=== PROJECT CONTEXT GENERATOR ===')
@@ -27,3 +26,4 @@ def main():
     print(f'Dung lượng: {len(context):,} ký tự')
 if __name__ == '__main__':
     main()
+

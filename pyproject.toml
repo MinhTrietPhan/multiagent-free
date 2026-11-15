@@ -1,18 +1,20 @@
 [project]
 name = "agent-hub"
-version = "0.1.0"
+version = "0.2.0"
 description = "Multi-agent hub (LangGraph supervisor + Gemini) with a repo-context agent"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
   "langgraph>=0.2",
   "langchain-core",
   "langchain-google-genai",
   "python-dotenv",
+  "pydantic>=2",
 ]
 
 [project.optional-dependencies]
 tokens = ["tiktoken"]   # exact token counts; otherwise chars/4 estimate
 dev = ["pytest"]
+mcp = ["langchain-mcp-adapters"]
 
 [project.scripts]
 hub = "hub.cli:main"                                # chat with the multi-agent hub

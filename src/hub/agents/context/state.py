@@ -25,3 +25,4 @@ class State(TypedDict, total=False):
     ranking: list[str]                # ranker: most important first
     entry_points: list[str]           # ranker
     output: str                       # renderer
+

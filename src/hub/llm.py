@@ -8,7 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from .config import MODEL_POOL, TEMPERATURE
 
 
-def get_llm_models():
+def get_llm_models(model_pool=None):
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
     if not api_key:
@@ -23,5 +23,6 @@ def get_llm_models():
             google_api_key=api_key,
             api_version="v1beta",
         )
-        for model_name in MODEL_POOL
+        for model_name in (model_pool or MODEL_POOL)
     ]
+

@@ -4,6 +4,8 @@ import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from .llm import get_llm_models
+from .config import MODEL_POOL
+import os
 logger = logging.getLogger(__name__)
 
 COOLDOWN_SECONDS = 3600
@@ -113,12 +115,15 @@ class StructuredOutputRouter:
         return self.router._invoke(input_data, structured_schema=self.schema, **self.config, **kwargs)
 
 
-@lru_cache(maxsize=1)
-def get_model_router():
-    """Return one shared ModelRouter."""
-    return ModelRouter(get_llm_models())
+@lru_cache(maxsize=8)
+def get_model_router(agent: str | None = None):
+    """Return a shared router; optional per-agent model preference precedes the common fallback pool."""
+    preferred = os.getenv(f"HUB_MODEL_{agent.upper()}") if agent else None
+    pool = ([preferred] if preferred else []) + [m for m in MODEL_POOL if m != preferred]
+    return ModelRouter(get_llm_models(pool))
 
 
-def get_llm():
-    """Return the shared ModelRouter."""
-    return get_model_router()
+def get_llm(agent: str | None = None):
+    """Return the shared ModelRouter, optionally using an agent-specific preferred model."""
+    return get_model_router(agent)
+

@@ -149,3 +149,4 @@ def test_qa_spec_registered():
     names = [a.name for a in AGENTS]
     assert "qa" in names
     assert "context" in names
+

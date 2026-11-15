@@ -4,6 +4,7 @@ An agent = AgentSpec(name, description, node)
   - name:        unique id, used as the graph node name
   - description: ONE clear sentence; the supervisor reads it to decide when to route here
   - node:        (HubState) -> dict, normally {"messages": [AIMessage(...)]}
+  - parallel_safe: True only for read-only, non-interrupting agents safe to run concurrently
 
 Inside, an agent can be anything: plain code (like `context`), a LangChain agent, or its own LangGraph
 subgraph. Use `langgraph.types.interrupt(...)` in a node when it needs to ask the user something.
@@ -17,3 +18,5 @@ class AgentSpec:
     name: str
     description: str
     node: Callable[[dict], dict]
+    parallel_safe: bool = False
+

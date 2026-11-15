@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: agent-hub
+Version: 0.1.0
+Summary: Multi-agent hub (LangGraph supervisor + Gemini) with a repo-context agent
+Requires-Python: >=3.10
+Requires-Dist: langgraph>=0.2
+Requires-Dist: langchain-core
+Requires-Dist: langchain-google-genai
+Requires-Dist: python-dotenv
+Provides-Extra: tokens
+Requires-Dist: tiktoken; extra == "tokens"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"

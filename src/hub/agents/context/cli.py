@@ -2,14 +2,12 @@ import argparse
 import sys
 from .config import DEFAULT_MODE, MODES, output_filename
 from .graph import build_context
-MENU = 'Chọn mức ngữ cảnh:\n  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n  2. balanced  Cân bằng (bản đồ + full code vài file chính)   [mặc định]\n  3. full      Đầy đủ (toàn bộ code, đã bỏ comment/output notebook)'
-
+MENU = 'Chọn mức ngữ cảnh:\n  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n  2. balanced  Cân bằng (bản đồ + full code vài file chính)   [mặc định]\n  3. full      Đầy đủ (toàn bộ code, giữ comment, bỏ output notebook)'
 
 def _ask_mode() -> str:
     print(MENU)
     choice = input('Chọn [2]: ').strip() or '2'
     return {'1': 'map', '2': 'balanced', '3': 'full'}.get(choice, DEFAULT_MODE)
-
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='repo-context', description=__doc__)
@@ -31,3 +29,4 @@ def main(argv=None):
         print(f'Wrote {out_path}', file=sys.stderr)
 if __name__ == '__main__':
     main()
+

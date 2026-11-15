@@ -2,5 +2,7 @@
 from .agents.base import AgentSpec
 from .agents.context import SPEC as context_spec
 from .agents.qa import SPEC as qa_spec
+from .agents.search import SPEC as search_spec
 
-AGENTS: list[AgentSpec] = [qa_spec, context_spec]
+AGENTS: list[AgentSpec] = [qa_spec, search_spec, context_spec]
+

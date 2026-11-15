@@ -32,5 +32,9 @@ NEED_MORE_CODE_INSTRUCTION = """Nếu context ở trên chưa đủ để trả 
 Đọc một hàm / class / method cụ thể (method Python có thể ghi "Class.method"):
 {"need_file": "<relative_path>", "function": "<name>"}
 
+Tìm chuỗi trong toàn bộ dự án:
+{"search": "<chuỗi cần tìm>"}
+
 Nếu ĐỦ thông tin, trả lời bình thường bằng markdown.
 """
+
