@@ -1,21 +1,26 @@
 # Project context: agent-hub
 > Root: `D:\Trietdeptrai\agent-hub`
-> repo-context · mode=full · files=50 · full_code=50 · commit=b6e4e49
+> repo-context · mode=full · files=69 · full_code=69 · commit=2726b9a
 > Reading guide: `[SKELETON]` = signatures + first docstring line only (`# L12` = line number; `c3:L5` = notebook cell 3, line 5). `[FULL]` = complete code, comments kept. `[CONFIG]` = config/doc file content. If you need the body of a skeleton file, ask the user for it by path.
-> ~32,479 tokens
+> ~41,675 tokens
 
 ## 1. Overview
 ### Stack
 - Declared dependencies: langchain-core, langchain-google-genai, langgraph, pydantic, python-dotenv
-- Third-party imports seen in code: dotenv, langchain_core, langchain_google_genai, langchain_mcp_adapters, langgraph, pydantic, pytest, tiktoken
+- Third-party imports seen in code: bs4, ddgs, dotenv, langchain_core, langchain_google_genai, langchain_mcp_adapters, langgraph, laya, pydantic, pytest, requests, tiktoken, trafilatura
 
 ### Entry points
 - `run_context.py`
+- `scripts/benchmark_laya_research.py`
 - `src/hub/agents/context/cli.py`
 - `src/hub/cli.py`
 
 ### Structure
 ```text
+├── benchmarks/
+│   └── README.md
+├── scripts/
+│   └── benchmark_laya_research.py
 ├── src/
 │   └── hub/
 │       ├── agents/
@@ -44,6 +49,29 @@
 │       │   │   ├── node.py
 │       │   │   ├── prompts.py
 │       │   │   └── tools.py
+│       │   ├── research/
+│       │   │   ├── collectors/
+│       │   │   │   ├── __init__.py
+│       │   │   │   ├── fetch.py
+│       │   │   │   └── search.py
+│       │   │   ├── controller/
+│       │   │   │   ├── __init__.py
+│       │   │   │   ├── decision_engine.py
+│       │   │   │   ├── pipeline.py
+│       │   │   │   └── policy.py
+│       │   │   ├── processors/
+│       │   │   │   ├── __init__.py
+│       │   │   │   ├── deduplicate.py
+│       │   │   │   └── source_quality.py
+│       │   │   ├── ranking/
+│       │   │   │   ├── __init__.py
+│       │   │   │   └── engine.py
+│       │   │   ├── reporting/
+│       │   │   │   ├── __init__.py
+│       │   │   │   └── formatter.py
+│       │   │   ├── __init__.py
+│       │   │   ├── node.py
+│       │   │   └── state.py
 │       │   ├── search/
 │       │   │   ├── __init__.py
 │       │   │   └── node.py
@@ -75,7 +103,8 @@
 │   ├── test_hub.py
 │   ├── test_platform_features.py
 │   ├── test_qa_agent.py
-│   └── test_qa_upgrade.py
+│   ├── test_qa_upgrade.py
+│   └── test_research_agent.py
 ├── .env.example
 ├── README.md
 ├── pyproject.toml
@@ -88,6 +117,7 @@
 graph LR
   run_context_py["run_context.py"] --> src_hub_agents_context_config_py["src/hub/agents/context/config.py"]
   run_context_py["run_context.py"] --> src_hub_agents_context_graph_py["src/hub/agents/context/graph.py"]
+  scripts_benchmark_laya_research_py["scripts/benchmark_laya_research.py"] --> src_hub_agents_research_controller_decision_engine_py["src/hub/agents/research/controller/decision_engine.py"]
   src_hub_agents_context_graph_py["src/hub/agents/context/graph.py"] --> src_hub_agents_context_nodes___init___py["src/hub/agents/context/nodes/__init__.py"]
   src_hub_agents_context_node_py["src/hub/agents/context/node.py"] --> src_hub_agents_context_tools_tokens_py["src/hub/agents/context/tools/tokens.py"]
   src_hub_agents_context_nodes___init___py["src/hub/agents/context/nodes/__init__.py"] --> src_hub_agents_context_nodes_discovery_py["src/hub/agents/context/nodes/discovery.py"]
@@ -106,6 +136,15 @@ graph LR
   src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"] --> src_hub_skills___init___py["src/hub/skills/__init__.py"]
   src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"] --> src_hub_tools_builtin_py["src/hub/tools/builtin.py"]
   src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"] --> src_hub_tools_registry_py["src/hub/tools/registry.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_collectors_fetch_py["src/hub/agents/research/collectors/fetch.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_collectors_search_py["src/hub/agents/research/collectors/search.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_controller_decision_engine_py["src/hub/agents/research/controller/decision_engine.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_controller_policy_py["src/hub/agents/research/controller/policy.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_processors_deduplicate_py["src/hub/agents/research/processors/deduplicate.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_ranking_engine_py["src/hub/agents/research/ranking/engine.py"]
+  src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"] --> src_hub_agents_research_reporting_formatter_py["src/hub/agents/research/reporting/formatter.py"]
+  src_hub_agents_research_node_py["src/hub/agents/research/node.py"] --> src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"]
+  src_hub_agents_research_ranking_engine_py["src/hub/agents/research/ranking/engine.py"] --> src_hub_agents_research_processors_source_quality_py["src/hub/agents/research/processors/source_quality.py"]
   src_hub_agents_search_node_py["src/hub/agents/search/node.py"] --> src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"]
   src_hub_agents_search_node_py["src/hub/agents/search/node.py"] --> src_hub_agents_qa_tools_py["src/hub/agents/qa/tools.py"]
   src_hub_agents_search_node_py["src/hub/agents/search/node.py"] --> src_hub_tools_builtin_py["src/hub/tools/builtin.py"]
@@ -116,17 +155,7 @@ graph LR
   src_hub_cli_py["src/hub/cli.py"] --> src_hub_tools_builtin_py["src/hub/tools/builtin.py"]
   src_hub_cli_py["src/hub/cli.py"] --> src_hub_tools_mcp_py["src/hub/tools/mcp.py"]
   src_hub_graph_py["src/hub/graph.py"] --> src_hub_agents_base_py["src/hub/agents/base.py"]
-  src_hub_graph_py["src/hub/graph.py"] --> src_hub_model_router_py["src/hub/model_router.py"]
-  src_hub_graph_py["src/hub/graph.py"] --> src_hub_orchestrator_py["src/hub/orchestrator.py"]
-  src_hub_graph_py["src/hub/graph.py"] --> src_hub_supervisor_py["src/hub/supervisor.py"]
-  src_hub_memory___init___py["src/hub/memory/__init__.py"] --> src_hub_memory_store_py["src/hub/memory/store.py"]
-  src_hub_model_router_py["src/hub/model_router.py"] --> src_hub_llm_py["src/hub/llm.py"]
-  src_hub_registry_py["src/hub/registry.py"] --> src_hub_agents_base_py["src/hub/agents/base.py"]
-  src_hub_registry_py["src/hub/registry.py"] --> src_hub_agents_context___init___py["src/hub/agents/context/__init__.py"]
-  src_hub_registry_py["src/hub/registry.py"] --> src_hub_agents_qa___init___py["src/hub/agents/qa/__init__.py"]
-  src_hub_registry_py["src/hub/registry.py"] --> src_hub_agents_search___init___py["src/hub/agents/search/__init__.py"]
-  src_hub_supervisor_py["src/hub/supervisor.py"] --> src_hub_agents_base_py["src/hub/agents/base.py"]
-  %% +19 more edges omitted
+  %% +37 more edges omitted
 ```
 
 ## 2. Files
@@ -154,6 +183,7 @@ class AgentSpec:
     description: str
     node: Callable[[dict], dict]
     parallel_safe: bool = False
+
 
 
 ```
@@ -290,6 +320,7 @@ def get_llm(agent: str | None = None):
     return get_model_router(agent)
 
 
+
 ```
 
 ### src/hub/tools/builtin.py  [FULL]
@@ -349,6 +380,7 @@ def register_builtin_tools():
             pass
     return registry
 
+
 ```
 
 ### src/hub/agents/context/__init__.py  [FULL]
@@ -360,6 +392,7 @@ from .node import context_node
 SPEC = AgentSpec(name='context', description='Project Context Agent: CHỈ dùng khi người dùng yêu cầu TẠO, XÂY DỰNG LẠI hoặc CẬP NHẬT file PROJECT_CONTEXT.md cho một dự án (có đưa đường dẫn hoặc nói rõ "tạo context"). Quét thư mục và ghi file, không dùng LLM, không trả lời câu hỏi. Mọi câu hỏi giải thích, hỏi cách hoạt động của code hoặc của agent đều KHÔNG thuộc agent này.', node=context_node)
 
 __all__ = ["SPEC", "build_context"]
+
 
 
 ```
@@ -581,6 +614,7 @@ def qa_node(state) -> dict:
         sources += f" + code bổ sung ({', '.join(extra_labels)})"
     final = f'{answer}\n\n---\n{sources}'
     return {'messages': [AIMessage(content=final, name=QA_NAME)]}
+
 
 
 ```
@@ -829,6 +863,106 @@ def find_project_root_from_context(context_text: str) -> str | None:
     return None
 
 
+
+```
+
+### src/hub/agents/research/controller/decision_engine.py  [FULL]
+```python
+"""Laya adapter. Lazy-loads the local decision model; never calls Gemini."""
+from __future__ import annotations
+import os
+from functools import lru_cache
+from typing import Any
+
+
+ACTIONS = ("FETCH_NEXT", "SEARCH_MORE", "VERIFY_TOP", "STOP")
+
+
+@lru_cache(maxsize=1)
+def _load_router():
+    # Laya's multilingual router handles Vietnamese. Loading is deferred until research is used.
+    os.environ.setdefault("USE_TF", "0")
+    try:
+        from laya import Router
+    except ImportError as exc:
+        raise RuntimeError("Thiếu Laya. Cài bằng: pip install -e '.[research]'") from exc
+    device = os.getenv("HUB_LAYA_DEVICE") or None
+    return Router(device=device) if device else Router()
+
+
+class LayaDecisionEngine:
+    def __init__(self, router=None):
+        self._router = router
+        self.model_name = os.getenv("HUB_LAYA_MODEL", "multilingual")
+
+    @property
+    def router(self):
+        if self._router is None:
+            self._router = _load_router()
+        return self._router
+
+    def predict(self, state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
+        result = self.router.predict(state, questions, model=self.model_name)
+        return result.get("answers", result)
+
+    def choose_action(self, state: dict[str, Any]) -> tuple[str | None, float | None]:
+        question = {
+            "next_action": {
+                "type": "choice",
+                "instructions": (
+                    "Choose the safest useful next step in a bounded web research workflow. "
+                    "Do not stop while useful unprocessed pages remain, but stop at configured limits."
+                ),
+                "criteria": {
+                    "FETCH_NEXT": "Fetch the next relevant URL already in the pending queue.",
+                    "SEARCH_MORE": "Search another query because coverage is insufficient and search budget remains.",
+                    "VERIFY_TOP": "Search for independent sources corroborating the leading story.",
+                    "STOP": "Stop because enough evidence is collected or the budget is exhausted.",
+                },
+            }
+        }
+        answers = self.predict(state, question)
+        answer = answers.get("next_action", {})
+        if isinstance(answer, str):
+            return answer, None
+        action = answer.get("choice")
+        confidence = answer.get("confidence")
+        try:
+            confidence = float(confidence) if confidence is not None else None
+        except (TypeError, ValueError):
+            confidence = None
+        return action, confidence
+
+    def score_articles(self, articles: list[dict[str, Any]]) -> dict[str, float]:
+        """Experimental ordinal scoring; use in shadow/benchmark until domain-validated."""
+        if not articles:
+            return {}
+        state = {"task": "Rank news by importance, relevance, freshness and evidence quality.",
+                 "articles": articles}
+        questions = {}
+        for i, article in enumerate(articles):
+            questions[f"article_{i}"] = {
+                "type": "score",
+                "instructions": (
+                    f"Rate the research value of article {i}: relevance to query, public impact, "
+                    "freshness and evidence quality. Ignore sensational wording."
+                ),
+                "criteria": ["very low", "low", "medium", "high", "very high"],
+            }
+        answers = self.predict(state, questions)
+        scores: dict[str, float] = {}
+        for i, article in enumerate(articles):
+            raw = answers.get(f"article_{i}", {})
+            if isinstance(raw, dict):
+                raw = raw.get("score")
+            try:
+                # Laya score is an ordinal expected level, not a calibrated percentage.
+                value = float(raw)
+                scores[str(article.get("url", i))] = max(0.0, min(100.0, value / 4.0 * 100.0))
+            except (TypeError, ValueError):
+                continue
+        return scores
+
 ```
 
 ### src/hub/memory/__init__.py  [FULL]
@@ -837,6 +971,7 @@ from .store import MemoryStore
 
 __all__ = ["MemoryStore"]
 
+
 ```
 
 ### src/hub/skills/__init__.py  [FULL]
@@ -844,6 +979,7 @@ __all__ = ["MemoryStore"]
 from .registry import Skill, SkillRegistry
 
 __all__ = ["Skill", "SkillRegistry"]
+
 
 ```
 
@@ -888,6 +1024,7 @@ _REGISTRY = ToolRegistry()
 
 def get_tool_registry() -> ToolRegistry:
     return _REGISTRY
+
 
 ```
 
@@ -1101,6 +1238,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+
 ```
 
 ### src/hub/__init__.py  [FULL]
@@ -1112,6 +1250,7 @@ def build_hub(*args, **kwargs):
     return _build_hub(*args, **kwargs)
 
 __all__ = ["build_hub"]
+
 
 ```
 
@@ -1179,6 +1318,7 @@ def render_tree(paths: list[str]) -> str:
                 walk(child, prefix + ('    ' if last else '│   '))
     walk(tree)
     return '\n'.join(lines)
+
 
 
 ```
@@ -1252,6 +1392,7 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
     return {'skeleton': skel, 'clean': source if keep_source else ast.unparse(tree), 'imports': imports, 'has_main': any((_is_main_guard(n) for n in tree.body))}
 
 
+
 ```
 
 ### src/hub/agents/context/tools/tokens.py  [FULL]
@@ -1275,6 +1416,7 @@ def count_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+
 ```
 
 ### src/hub/agents/qa/__init__.py  [FULL]
@@ -1284,6 +1426,397 @@ from .node import qa_node
 SPEC = AgentSpec(name='qa', description='Project QA Agent: Chuyên trả lời câu hỏi và giải thích source code của dự án dựa trên file PROJECT_CONTEXT.md. Sử dụng Gemini để phân tích kiến trúc, class, function, module, luồng xử lý và mối quan hệ giữa các thành phần. Khi context chưa đủ thông tin, Agent có thể đọc thêm file source code hoặc function cụ thể để tìm câu trả lời chính xác hơn. Sử dụng khi người dùng đặt câu hỏi, muốn giải thích, phân tích hoặc tìm hiểu code trong một dự án đã có context.', node=qa_node, parallel_safe=True)
 __all__ = ['SPEC']
 
+
+
+```
+
+### src/hub/agents/research/collectors/fetch.py  [FULL]
+```python
+from __future__ import annotations
+import ipaddress
+import socket
+from urllib.parse import urljoin, urlparse
+
+USER_AGENT = "AgentHubResearch/0.1 (+local research client)"
+MAX_BYTES = 2_000_000
+
+
+def validate_public_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Only public HTTP(S) URLs are allowed")
+    if parsed.username or parsed.password:
+        raise ValueError("URLs containing credentials are not allowed")
+    host = parsed.hostname.rstrip(".").lower()
+    if host in {"localhost", "localhost.localdomain"}:
+        raise ValueError("Localhost URLs are blocked")
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))}
+    except OSError as exc:
+        raise ValueError(f"Could not resolve host: {host}") from exc
+    if not addresses:
+        raise ValueError("Host did not resolve")
+    for address in addresses:
+        ip = ipaddress.ip_address(address.split("%", 1)[0])
+        if not ip.is_global:
+            raise ValueError("Private, local or reserved network addresses are blocked")
+    return url
+
+
+def fetch_html(url: str, timeout: int = 12, max_redirects: int = 3) -> tuple[str, str]:
+    try:
+        import requests
+    except ImportError as exc:
+        raise RuntimeError("Thiếu requests. Cài bằng: pip install -e '.[research]'") from exc
+    current = url
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9"}
+    with requests.Session() as session:
+        for _ in range(max_redirects + 1):
+            validate_public_url(current)
+            response = session.get(current, headers=headers, timeout=timeout, stream=True,
+                                   allow_redirects=False)
+            if response.is_redirect or response.is_permanent_redirect:
+                location = response.headers.get("Location")
+                response.close()
+                if not location:
+                    raise ValueError("Redirect without Location header")
+                current = urljoin(current, location)
+                continue
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").lower()
+            if content_type and not any(x in content_type for x in ("text/html", "application/xhtml", "text/plain")):
+                response.close()
+                raise ValueError(f"Unsupported content type: {content_type}")
+            chunks, size = [], 0
+            for chunk in response.iter_content(65536):
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    response.close()
+                    raise ValueError("Page exceeds 2 MB limit")
+                chunks.append(chunk)
+            response.close()
+            encoding = response.encoding or "utf-8"
+            return b"".join(chunks).decode(encoding, errors="replace"), current
+    raise ValueError("Too many redirects")
+
+
+def extract_text(html: str) -> str:
+    try:
+        import trafilatura
+        text = trafilatura.extract(html, include_comments=False, include_tables=False,
+                                   favor_precision=True)
+        if text:
+            return text.strip()
+    except ImportError:
+        pass
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    for node in soup(["script", "style", "nav", "footer", "header", "aside"]):
+        node.decompose()
+    return "\n".join(s.strip() for s in soup.get_text("\n").splitlines() if s.strip())
+
+
+def fetch_article(url: str) -> tuple[str, str]:
+    html, final_url = fetch_html(url)
+    return extract_text(html), final_url
+
+```
+
+### src/hub/agents/research/controller/pipeline.py  [FULL]
+```python
+from __future__ import annotations
+import os
+from datetime import datetime
+from urllib.parse import urlparse
+
+from ..collectors.search import WebSearchClient
+from ..collectors.fetch import fetch_article
+from ..processors.deduplicate import deduplicate, title_key
+from ..ranking.engine import rank_articles
+from ..reporting.formatter import format_report
+from ..state import Article, ResearchState
+from .decision_engine import LayaDecisionEngine
+from .policy import choose_action
+
+
+def _same_story(title: str, other: str) -> bool:
+    a, b = title_key(title), title_key(other)
+    union = a | b
+    return bool(union) and len(a & b) / len(union) >= 0.45
+
+
+class ResearchPipeline:
+    def __init__(self, searcher=None, fetcher=None, decision_engine=None):
+        self.searcher = searcher or WebSearchClient(max_results=int(os.getenv("HUB_RESEARCH_RESULTS_PER_QUERY", "12")))
+        self.fetcher = fetcher or fetch_article
+        self.decision_engine = decision_engine or LayaDecisionEngine()
+        self.mode = os.getenv("HUB_RESEARCH_LAYA_MODE", "shadow").lower()
+        if self.mode not in {"shadow", "active", "off"}:
+            self.mode = "shadow"
+        self.max_rounds = int(os.getenv("HUB_RESEARCH_MAX_SEARCH_ROUNDS", "2"))
+        self.max_pages = int(os.getenv("HUB_RESEARCH_MAX_PAGES", "12"))
+
+    def _search(self, state: ResearchState):
+        today = datetime.now().astimezone().date().isoformat()
+        if state.search_rounds == 0:
+            query = f'{state.query} {today}'
+        elif state.search_rounds == 1:
+            query = f'{state.query} latest news developments'
+        else:
+            query = f'{state.query} analysis official announcement'
+        rows = self.searcher.search(query)
+        state.search_rounds += 1
+        state.search_evidence.extend(rows)
+        merged = deduplicate(state.all_search_results + rows)
+        state.all_search_results = merged
+        fetched = {a.url for a in state.articles}
+        queued = {r["url"] for r in state.pending_urls}
+        state.pending_urls.extend(r for r in merged if r["url"] not in fetched and r["url"] not in queued)
+        state.actions.append(f"SEARCH: {len(rows)} results for round {state.search_rounds}")
+
+    def _fetch_next(self, state: ResearchState):
+        if not state.pending_urls or state.fetched_count >= state.max_pages:
+            return
+        row = state.pending_urls.pop(0)
+        url = row["url"]
+        domain = (urlparse(url).hostname or "").removeprefix("www.")
+        article = Article(url=url, title=row.get("title") or url,
+                          snippet=row.get("snippet", ""), source=domain,
+                          published_at=row.get("published_at"))
+        try:
+            content, final_url = self.fetcher(url)
+            article.content = content[:12000]
+            article.url = final_url
+            article.source = (urlparse(final_url).hostname or domain).removeprefix("www.")
+        except Exception as exc:
+            article.fetch_error = f"{type(exc).__name__}: {exc}"
+            state.warnings.append(f"Fetch failed for {url}: {type(exc).__name__}")
+        corroborating = set()
+        for candidate in state.search_evidence:
+            if candidate.get("url") != url and _same_story(article.title, candidate.get("title", "")):
+                host = (urlparse(candidate["url"]).hostname or "").removeprefix("www.")
+                if host and host != article.source:
+                    corroborating.add(host)
+        if article.source:
+            corroborating.add(article.source)
+        article.corroborating_sources = sorted(corroborating)
+        state.articles.append(article)
+        state.fetched_count += 1
+        state.actions.append(f"FETCH: {article.title[:90]}")
+
+    def _verify_top(self, state: ResearchState):
+        if not state.articles:
+            return
+        current = rank_articles(state.articles)[0]
+        query = f'"{current.title[:160]}"'
+        try:
+            rows = self.searcher.search(query)
+        except Exception as exc:
+            state.warnings.append(f"Verification search failed: {type(exc).__name__}")
+            return
+        state.search_evidence.extend(rows)
+        domains = set(current.corroborating_sources)
+        for row in rows:
+            if _same_story(current.title, row.get("title", "")):
+                host = (urlparse(row.get("url", "")).hostname or "").removeprefix("www.")
+                if host:
+                    domains.add(host)
+        current.corroborating_sources = sorted(domains)
+        state.actions.append(f"VERIFY: {len(domains)} distinct matching domains for top story")
+
+    def run(self, query: str) -> tuple[ResearchState, list[Article]]:
+        state = ResearchState(query=query, max_search_rounds=self.max_rounds, max_pages=self.max_pages)
+        for _ in range(state.max_iterations):
+            engine = self.decision_engine if self.mode != "off" else None
+            action, predicted = choose_action(state, engine, self.mode)
+            if action == "SEARCH_MORE":
+                self._search(state)
+            elif action == "FETCH_NEXT":
+                self._fetch_next(state)
+            elif action == "VERIFY_TOP":
+                self._verify_top(state)
+                # Prevent repeated VERIFY_TOP from trapping the loop.
+                if self.mode == "active":
+                    state.actions.append("VERIFY completed; next action must progress or stop")
+                    if state.pending_urls:
+                        self._fetch_next(state)
+                    elif state.search_rounds < state.max_search_rounds:
+                        self._search(state)
+                    else:
+                        break
+            else:
+                break
+        else:
+            state.warnings.append("Reached hard iteration limit; research stopped safely.")
+
+        laya_scores = {}
+        if self.mode != "off" and state.articles and not getattr(self.decision_engine, "_unavailable", False):
+            candidates = [a for a in state.articles if a.content][:8]
+            try:
+                laya_scores = self.decision_engine.score_articles([
+                    {"url": a.url, "title": a.title, "source": a.source,
+                     "published_at": a.published_at, "content": a.content[:250]}
+                    for a in candidates
+                ])
+            except Exception as exc:
+                state.warnings.append(f"Laya scoring unavailable: {type(exc).__name__}")
+        for article in state.articles:
+            if article.url in laya_scores:
+                article.laya_score = laya_scores[article.url]
+        ranked = rank_articles(state.articles, laya_scores, use_laya=self.mode == "active")
+        return state, ranked
+
+
+def run_research(query: str) -> str:
+    pipeline = ResearchPipeline()
+    state, ranked = pipeline.run(query)
+    return format_report(state, ranked, pipeline.mode)
+
+```
+
+### src/hub/agents/research/controller/policy.py  [FULL]
+```python
+from __future__ import annotations
+from ..state import ResearchState
+
+
+def deterministic_action(state: ResearchState) -> str:
+    """Safe bounded policy used by default and whenever Laya is unavailable/uncertain."""
+    if state.fetched_count >= state.max_pages:
+        return "STOP"
+    if state.pending_urls:
+        return "FETCH_NEXT"
+    if state.search_rounds < state.max_search_rounds:
+        return "SEARCH_MORE"
+    return "STOP"
+
+
+def choose_action(state: ResearchState, laya_engine=None, mode: str = "shadow") -> tuple[str, str | None]:
+    fallback = deterministic_action(state)
+    if laya_engine is None or getattr(laya_engine, "_unavailable", False):
+        return fallback, None
+    try:
+        predicted, confidence = laya_engine.choose_action(state.compact())
+    except Exception as exc:
+        try:
+            laya_engine._unavailable = True
+        except Exception:
+            pass
+        state.warnings.append(f"Laya unavailable; fallback policy used: {type(exc).__name__}: {exc}")
+        return fallback, None
+    if predicted not in {"FETCH_NEXT", "SEARCH_MORE", "VERIFY_TOP", "STOP"}:
+        state.warnings.append("Laya returned an unknown action; fallback policy used.")
+        return fallback, None
+    state.actions.append(f"Laya predicted {predicted} (confidence={confidence})")
+    if mode != "active":
+        return fallback, predicted
+    # Confidence is not a correctness guarantee. Active mode is opt-in and still obeys hard budgets.
+    if predicted == "FETCH_NEXT" and state.pending_urls and state.fetched_count < state.max_pages:
+        return predicted, predicted
+    if predicted == "SEARCH_MORE" and state.search_rounds < state.max_search_rounds:
+        return predicted, predicted
+    if predicted == "VERIFY_TOP" and state.articles:
+        return predicted, predicted
+    if predicted == "STOP":
+        return predicted, predicted
+    state.warnings.append(f"Laya action {predicted} was unsafe/inapplicable; deterministic fallback used.")
+    return fallback, predicted
+
+```
+
+### src/hub/agents/research/processors/deduplicate.py  [FULL]
+```python
+from __future__ import annotations
+import re
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
+
+
+def canonical_url(url: str) -> str:
+    parts = urlsplit(url.strip())
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if not k.lower().startswith("utm_") and k.lower() not in TRACKING_KEYS]
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), urlencode(query), ""))
+
+
+def title_key(title: str) -> set[str]:
+    return set(re.findall(r"[\w]{3,}", title.lower()))
+
+
+def deduplicate(rows: list[dict]) -> list[dict]:
+    output, urls, title_sets = [], set(), []
+    for row in rows:
+        url = canonical_url(row.get("url", ""))
+        title = (row.get("title") or "").strip()
+        tokens = title_key(title)
+        if not url or url in urls:
+            continue
+        duplicate = False
+        for old in title_sets:
+            union = tokens | old
+            similarity = len(tokens & old) / len(union) if union else 0
+            if similarity >= 0.78:
+                duplicate = True
+                break
+        if duplicate:
+            continue
+        urls.add(url)
+        title_sets.append(tokens)
+        output.append({**row, "url": url})
+    return output
+
+```
+
+### src/hub/agents/research/ranking/engine.py  [FULL]
+```python
+from __future__ import annotations
+from datetime import datetime, timezone, timedelta
+import re
+from urllib.parse import urlparse
+from ..state import Article
+from ..processors.source_quality import source_score
+
+
+def _recency_score(published_at: str | None) -> float:
+    if not published_at:
+        return 0.35
+    try:
+        relative = re.fullmatch(r"\s*(\d+)\s+(minute|hour|day)s?\s+ago\s*", published_at.lower())
+        if relative:
+            amount = int(relative.group(1))
+            unit = relative.group(2)
+            delta = timedelta(minutes=amount) if unit == "minute" else timedelta(hours=amount) if unit == "hour" else timedelta(days=amount)
+            value = datetime.now(timezone.utc) - delta
+        elif published_at.lower().strip() == "yesterday":
+            value = datetime.now(timezone.utc) - timedelta(days=1)
+        else:
+            value = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        hours = max(0.0, (datetime.now(timezone.utc) - value).total_seconds() / 3600)
+        return max(0.0, 1.0 - hours / (72 * 1.0))
+    except (ValueError, TypeError):
+        return 0.35
+
+
+def rank_articles(articles: list[Article], laya_scores: dict[str, float] | None = None,
+                  use_laya: bool = False) -> list[Article]:
+    laya_scores = laya_scores or {}
+    for article in articles:
+        domain_score = source_score(article.url)
+        freshness = _recency_score(article.published_at)
+        corroboration = min(1.0, len(set(article.corroborating_sources)) / 3.0)
+        content_signal = min(1.0, len(article.content) / 5000.0)
+        # Transparent baseline: no social-engagement data is available, so this is not a virality score.
+        heuristic = 100 * (0.35 * freshness + 0.30 * domain_score + 0.25 * corroboration + 0.10 * content_signal)
+        article.heuristic_score = round(heuristic, 2)
+        if use_laya and article.url in laya_scores:
+            article.laya_score = round(laya_scores[article.url], 2)
+            article.final_score = round(0.65 * article.laya_score + 0.35 * heuristic, 2)
+        else:
+            article.final_score = article.heuristic_score
+    return sorted(articles, key=lambda item: item.final_score, reverse=True)
 
 ```
 
@@ -1307,6 +1840,7 @@ LOW_HINTS = ('test_', '_test', 'setup.py', 'conftest', 'migrations')
 def output_filename(mode: str) -> str:
     """Tên file theo mức ngữ cảnh: map -> PROJECT_CONTEXT_map.md, balanced -> ..._balanced.md, full -> ..._full.md."""
     return OUTPUT_FILE_TEMPLATE.format(mode=mode)
+
 
 
 ```
@@ -1342,6 +1876,81 @@ def main():
 if __name__ == '__main__':
     main()
 
+
+
+```
+
+### scripts/benchmark_laya_research.py  [FULL]
+```python
+"""Evaluate Laya on a hand-labelled research decision JSONL dataset.
+
+Each line is one of:
+  {"kind":"action", "state": {...}, "expected":"FETCH_NEXT"}
+  {"kind":"article_score", "article": {"url":"...", "title":"...", "content":"..."}, "expected": 0..4}
+
+Do not switch HUB_RESEARCH_LAYA_MODE=active until this benchmark is representative
+and the model beats a simple majority/mean baseline on a held-out split.
+"""
+from __future__ import annotations
+import argparse
+import json
+from pathlib import Path
+from statistics import mean
+
+from hub.agents.research.controller.decision_engine import LayaDecisionEngine
+
+QUESTIONS = {
+    "next_action": {
+        "type": "choice",
+        "instructions": "Choose the safest useful next action for the current research state.",
+        "criteria": {
+            "FETCH_NEXT": "Fetch the next relevant URL already queued.",
+            "SEARCH_MORE": "Search more because coverage is insufficient and budget remains.",
+            "VERIFY_TOP": "Seek independent corroboration for the leading result.",
+            "STOP": "Stop because evidence is sufficient or limits are reached.",
+        },
+    }
+}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dataset", type=Path, help="Hand-labelled JSONL file")
+    args = parser.parse_args()
+    engine = LayaDecisionEngine()
+    action_total = action_correct = 0
+    score_errors = []
+    score_pairs = []
+    for line_no, line in enumerate(args.dataset.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        row = json.loads(line)
+        if row["kind"] == "action":
+            predicted, _ = engine.choose_action(row["state"])
+            action_total += 1
+            action_correct += int(predicted == row["expected"])
+        elif row["kind"] == "article_score":
+            article = row["article"]
+            scores = engine.score_articles([article])
+            predicted_100 = scores.get(str(article.get("url", 0)))
+            if predicted_100 is not None:
+                predicted = predicted_100 / 25.0
+                expected = float(row["expected"])
+                score_errors.append(abs(predicted - expected))
+                score_pairs.append((predicted, expected))
+        else:
+            raise ValueError(f"Unknown kind at line {line_no}: {row['kind']}")
+    print(f"Action accuracy: {action_correct}/{action_total} = "
+          f"{action_correct / action_total:.3f}" if action_total else "Action accuracy: no action rows")
+    print(f"Article score MAE: {mean(score_errors):.3f} over {len(score_errors)} rows"
+          if score_errors else "Article score MAE: no score rows")
+    if action_total:
+        print("Action majority baseline must be calculated from the labelled dataset before comparing.")
+    print("Do not use confidence as a correctness guarantee; inspect per-class errors and held-out data.")
+
+
+if __name__ == "__main__":
+    main()
 
 ```
 
@@ -1380,6 +1989,7 @@ if __name__ == '__main__':
     main()
 
 
+
 ```
 
 ### src/hub/agents/context/graph.py  [FULL]
@@ -1416,6 +2026,7 @@ def build_context(root: str, mode: str = DEFAULT_MODE, budget: int | None = ...,
     return result["output"]
 
 
+
 ```
 
 ### src/hub/agents/context/nodes/__init__.py  [FULL]
@@ -1437,6 +2048,7 @@ PIPELINE: list[tuple[str, AgentNode]] = [
 ]
 
 
+
 ```
 
 ### src/hub/agents/context/nodes/discovery.py  [FULL]
@@ -1448,6 +2060,7 @@ from ..tools.files import discover
 def discovery_node(state: State) -> dict:
     files, manifests = discover(state["root"], state.get("exclude", []))
     return {"files": files, "manifests": manifests}
+
 
 
 ```
@@ -1473,6 +2086,7 @@ def parser_node(state: State) -> dict:
             skeleton = '\n'.join(a['skeleton'])
         parsed[f] = {'kind': kind, 'skeleton': skeleton, 'clean': a['clean'], 'imports': a['imports'], 'has_main': a['has_main']}
     return {'parsed': parsed}
+
 
 
 ```
@@ -1533,6 +2147,7 @@ def ranker_node(state: State) -> dict:
 
     ranking = sorted(parsed, key=lambda f: (-scores[f], f))
     return {"edges": sorted(edges), "ranking": ranking, "entry_points": sorted(entry_points)}
+
 
 
 ```
@@ -1652,6 +2267,7 @@ def renderer_node(state: State) -> dict:
     return {'output': out}
 
 
+
 ```
 
 ### src/hub/agents/context/tools/notebook.py  [FULL]
@@ -1686,6 +2302,7 @@ def analyze_notebook(raw: str, keep_source: bool=False) -> dict:
             imports += a['imports']
             has_main = has_main or a['has_main']
     return {'skeleton': skel, 'clean': '\n\n'.join(clean), 'imports': imports, 'has_main': has_main}
+
 
 
 ```
@@ -1733,6 +2350,173 @@ Nếu ĐỦ thông tin, trả lời bình thường bằng markdown.
 """
 
 
+
+```
+
+### src/hub/agents/research/__init__.py  [FULL]
+```python
+from ..base import AgentSpec
+from .node import research_node
+
+SPEC = AgentSpec(
+    name="research",
+    description=(
+        "Research Web Agent: tìm kiếm, thu thập, lọc trùng, kiểm chứng và xếp hạng "
+        "thông tin từ nhiều website; dùng Laya làm decision model, không dùng Gemini trong research loop."
+    ),
+    node=research_node,
+    parallel_safe=False,
+)
+
+__all__ = ["SPEC", "research_node"]
+
+```
+
+### src/hub/agents/research/collectors/search.py  [FULL]
+```python
+from __future__ import annotations
+
+
+class WebSearchClient:
+    def __init__(self, max_results: int = 12):
+        self.max_results = max_results
+
+    def search(self, query: str) -> list[dict]:
+        try:
+            from ddgs import DDGS
+        except ImportError as exc:
+            raise RuntimeError("Thiếu ddgs. Cài bằng: pip install -e '.[research]'") from exc
+        with DDGS() as client:
+            rows = client.text(query, max_results=self.max_results)
+        results = []
+        for row in rows or []:
+            url = row.get("href") or row.get("url")
+            if not url:
+                continue
+            results.append({
+                "url": url,
+                "title": row.get("title") or url,
+                "snippet": row.get("body") or row.get("snippet") or "",
+                "published_at": row.get("date") or row.get("published") or None,
+            })
+        return results
+
+```
+
+### src/hub/agents/research/processors/source_quality.py  [FULL]
+```python
+from urllib.parse import urlparse
+
+# A conservative starter allowlist. This is a heuristic, not a factual guarantee of credibility.
+TRUSTED_DOMAINS = {
+    "reuters.com": 1.0, "apnews.com": 1.0, "bbc.com": 0.95, "bbc.co.uk": 0.95,
+    "theguardian.com": 0.9, "nytimes.com": 0.9, "arstechnica.com": 0.9,
+    "technologyreview.com": 0.9, "nature.com": 1.0, "science.org": 1.0,
+    "openai.com": 0.85, "deepmind.google": 0.85, "ai.google": 0.85,
+    "nvidia.com": 0.85, "microsoft.com": 0.85, "anthropic.com": 0.85,
+}
+
+
+def source_score(url: str) -> float:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    if host in TRUSTED_DOMAINS:
+        return TRUSTED_DOMAINS[host]
+    for domain, score in TRUSTED_DOMAINS.items():
+        if host.endswith("." + domain):
+            return score
+    return 0.75 if host.endswith(".gov") else 0.65 if host.endswith(".edu") else 0.4
+
+```
+
+### src/hub/agents/research/reporting/formatter.py  [FULL]
+```python
+from ..state import Article, ResearchState
+
+
+def format_report(state: ResearchState, articles: list[Article], mode: str) -> str:
+    lines = [f"## Research: {state.query}",
+             f"Laya mode: `{mode}` | Search rounds: {state.search_rounds} | Pages read: {state.fetched_count}",
+             "", "### Top results"]
+    if not articles:
+        lines.append("Không thu thập được bài viết phù hợp.")
+    for index, article in enumerate(articles[:10], 1):
+        lines += [
+            f"**{index}. {article.title}** — {article.final_score:.1f}/100",
+            f"- Source: {article.source or 'unknown'}",
+            f"- Published: {article.published_at or 'not available'}",
+            f"- URL: {article.url}",
+            f"- Cross-source matches: {len(set(article.corroborating_sources))}",
+        ]
+        excerpt = (article.content or article.snippet).replace("\n", " ").strip()[:450]
+        if excerpt:
+            lines.append(f"- Summary extract: {excerpt}")
+        lines.append("")
+    lines += ["### Research notes",
+              "- Điểm xếp hạng là heuristic + Laya (nếu active), không phải thước đo độ viral.",
+              "- Ngày đăng có thể thiếu nếu website không cung cấp metadata."]
+    if state.warnings:
+        lines += ["", "### Warnings"] + [f"- {warning}" for warning in state.warnings[:8]]
+    if state.actions:
+        lines += ["", "### Decision log"] + [f"- {action}" for action in state.actions[-8:]]
+    return "\n".join(lines)
+
+```
+
+### src/hub/agents/research/state.py  [FULL]
+```python
+from __future__ import annotations
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+
+@dataclass
+class Article:
+    url: str
+    title: str
+    snippet: str = ""
+    source: str = ""
+    published_at: str | None = None
+    content: str = ""
+    corroborating_sources: list[str] = field(default_factory=list)
+    laya_score: float | None = None
+    heuristic_score: float = 0.0
+    final_score: float = 0.0
+    fetch_error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ResearchState:
+    query: str
+    search_rounds: int = 0
+    fetched_count: int = 0
+    max_search_rounds: int = 3
+    max_pages: int = 12
+    max_iterations: int = 20
+    pending_urls: list[dict[str, str]] = field(default_factory=list)
+    all_search_results: list[dict[str, str]] = field(default_factory=list)
+    search_evidence: list[dict[str, str]] = field(default_factory=list)
+    articles: list[Article] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def compact(self) -> dict[str, Any]:
+        return {
+            "query": self.query[:300],
+            "search_rounds": self.search_rounds,
+            "fetched_count": self.fetched_count,
+            "pending_count": len(self.pending_urls),
+            "article_count": len(self.articles),
+            "max_search_rounds": self.max_search_rounds,
+            "max_pages": self.max_pages,
+            "top_candidates": [
+                {"title": a.title[:100], "source": a.source, "published_at": a.published_at}
+                for a in self.articles[:5]
+            ],
+        }
+
 ```
 
 ### src/hub/agents/search/__init__.py  [FULL]
@@ -1746,6 +2530,7 @@ SPEC = AgentSpec(
     node=search_node,
     parallel_safe=True,
 )
+
 
 ```
 
@@ -1776,6 +2561,7 @@ def build_hub(agents: list[AgentSpec] | None = None, llm_factory=get_llm, checkp
     routes["orchestrator"] = "orchestrator"
     g.add_conditional_edges("supervisor", lambda s: s["next"], routes)
     return g.compile(checkpointer=checkpointer or MemorySaver())
+
 
 ```
 
@@ -1808,6 +2594,7 @@ def get_llm_models(model_pool=None):
         )
         for model_name in (model_pool or MODEL_POOL)
     ]
+
 
 
 ```
@@ -1879,6 +2666,7 @@ class MemoryStore:
         p = Path(root) / ".hub" / "project_memory.md"
         return p.read_text(encoding="utf-8") if p.is_file() else ""
 
+
 ```
 
 ### src/hub/orchestrator.py  [FULL]
@@ -1910,6 +2698,7 @@ def make_orchestrator(agents):
         return {"messages": [AIMessage(content=body, name="orchestrator")]}
     return orchestrator
 
+
 ```
 
 ### src/hub/registry.py  [FULL]
@@ -1919,8 +2708,10 @@ from .agents.base import AgentSpec
 from .agents.context import SPEC as context_spec
 from .agents.qa import SPEC as qa_spec
 from .agents.search import SPEC as search_spec
+from .agents.research import SPEC as research_spec
 
-AGENTS: list[AgentSpec] = [qa_spec, search_spec, context_spec]
+AGENTS: list[AgentSpec] = [qa_spec, search_spec, context_spec, research_spec]
+
 
 
 ```
@@ -1973,6 +2764,11 @@ def make_supervisor(agents: list[AgentSpec], llm_factory=get_llm):
             return {"next": "context", "delegated": []}
         if "search" in names and request.startswith(("search ", "tìm trong source", "tìm kiếm trong code", "grep ")):
             return {"next": "search", "delegated": []}
+        if "research" in names and request.startswith((
+            "research ", "web research", "tìm kiếm web", "tìm tin tức",
+            "tin tức ", "tìm thông tin trên internet", "tìm kiếm trên internet"
+        )):
+            return {"next": "research", "delegated": []}
         if len(agents) == 1:
             return {"next": names[0], "delegated": []}
         prompt = PROMPT.format(catalog=catalog, request=request, default=names[0])
@@ -1987,6 +2783,7 @@ def make_supervisor(agents: list[AgentSpec], llm_factory=get_llm):
             return {"next": "orchestrator", "delegated": selected}
         return {"next": route.agent if route.agent in names else names[0], "delegated": []}
     return supervisor
+
 
 ```
 
@@ -2012,6 +2809,7 @@ async def load_mcp_tools(registry: ToolRegistry):
         registry.register(ToolSpec(name=tool.name, description=tool.description or "MCP tool", handler=(lambda _tool=tool, **kwargs: _tool.invoke(kwargs)), requires_confirmation=True, source="mcp"), replace=True)
     return tools
 
+
 ```
 
 ### src/hub/config.py  [FULL]
@@ -2035,6 +2833,7 @@ MODEL_POOL = [
     if model.strip()
 ]
 
+
 ```
 
 ### src/hub/agents/__init__.py  [FULL]
@@ -2042,70 +2841,155 @@ MODEL_POOL = [
 """One sub-package per agent. Each exposes a `SPEC` (see base.py); register it in hub/registry.py."""
 
 
+
 ```
 
 ### src/hub/agents/context/node.py  [FULL]
 ```python
+
 """Hub-facing wrapper of the context agent: parse the request, ask the fixed menu if needed, run, reply."""
-import os
+
 import re
 from pathlib import Path
+
 from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
+
 from .config import output_filename
 from .graph import build_context
 from .tools.tokens import count_tokens
-MENU = 'Bạn muốn mức ngữ cảnh nào?\n  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n  2. balanced  Cân bằng (bản đồ + full code vài file chính)\n  3. full      Đầy đủ (toàn bộ code, đã bỏ comment/output notebook)\nNhập 1/2/3 (mặc định 2):'
-_MODE_KEYWORDS = {'map': ('map', 'tổng quan', 'bản đồ', 'skeleton'), 'full': ('full', 'đầy đủ', 'toàn bộ'), 'balanced': ('balanced', 'cân bằng')}
+
+
+MENU = (
+    "Bạn muốn mức ngữ cảnh nào?\n"
+    "  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n"
+    "  2. balanced  Cân bằng (bản đồ + full code vài file chính)\n"
+    "  3. full      Đầy đủ (toàn bộ code, đã bỏ comment/output notebook)\n"
+    "Nhập 1/2/3 (mặc định 2):"
+)
+
+_MODE_KEYWORDS = {
+    "map": ("map", "tổng quan", "bản đồ", "skeleton"),
+    "full": ("full", "đầy đủ", "toàn bộ"),
+    "balanced": ("balanced", "cân bằng"),
+}
+
+CANCEL = {"0", "q", "exit", "huỷ", "huy", "cancel"}
 
 
 def _last_user_text(state) -> str:
-    for m in reversed(state.get('messages', [])):
-        if getattr(m, 'type', '') == 'human':
-            return m.content if isinstance(m.content, str) else str(m.content)
-    return ''
+    for message in reversed(state.get("messages", [])):
+        if getattr(message, "type", "") == "human":
+            return (
+                message.content
+                if isinstance(message.content, str)
+                else str(message.content)
+            )
+    return ""
 
 
 def _find_dir(text: str) -> str | None:
-    for tok in re.findall('[\\w./~\\\\:-]+', text):
-        cleaned = tok.rstrip(',:;')
-        if cleaned and Path(cleaned).expanduser().is_dir():
-            return str(Path(cleaned).expanduser().resolve())
+    for token in re.findall(r'[\w./~\\:-]+', text):
+        cleaned = token.rstrip(",:;")
+        path = Path(cleaned).expanduser()
+
+        if cleaned and path.is_dir():
+            return str(path.resolve())
+
     return None
 
 
 def _find_mode(text: str) -> str | None:
-    low = text.lower()
-    for mode, kws in _MODE_KEYWORDS.items():
-        if any((re.search(f'\\b{re.escape(k)}\\b', low) for k in kws)):
+    text_lower = text.lower()
+
+    for mode, keywords in _MODE_KEYWORDS.items():
+        if any(
+            re.search(rf"\b{re.escape(keyword)}\b", text_lower)
+            for keyword in keywords
+        ):
             return mode
+
     return None
-CANCEL = {'0', 'q', 'exit', 'huỷ', 'huy', 'cancel'}
 
 
 def context_node(state) -> dict:
     text = _last_user_text(state)
+
+    # 1. Xác định thư mục dự án
     root = _find_dir(text)
+
     if root is None:
-        ans = str(interrupt('Dự án nằm ở đâu? Nhập đường dẫn thư mục (gõ . cho thư mục hiện tại, 0 để huỷ):')).strip().strip('"')
-        if ans.lower() in CANCEL:
-            return {'messages': [AIMessage('Đã huỷ, không tạo file.')]}
-        if not Path(ans).expanduser().is_dir():
-            return {'messages': [AIMessage(f'Không tìm thấy thư mục: {ans}')]}
-        root = str(Path(ans).expanduser())
+        answer = str(
+            interrupt(
+                "Dự án nằm ở đâu? Nhập đường dẫn thư mục "
+                "(gõ . cho thư mục hiện tại, 0 để huỷ):"
+            )
+        ).strip().strip('"')
+
+        if answer.lower() in CANCEL:
+            return {
+                "messages": [
+                    AIMessage("Đã huỷ, không tạo file.")
+                ]
+            }
+
+        project_path = Path(answer).expanduser()
+
+        if not project_path.is_dir():
+            return {
+                "messages": [
+                    AIMessage(f"Không tìm thấy thư mục: {answer}")
+                ]
+            }
+
+        root = str(project_path.resolve())
+
+    project_root = Path(root).resolve()
+
+    # 2. Xác định chế độ tạo context
     mode = _find_mode(text)
+
     if mode is None:
         choice = str(interrupt(MENU)).strip().lower()
-        if choice in CANCEL:
-            return {'messages': [AIMessage('Đã huỷ, không tạo file.')]}
-        mode = {'1': 'map', '2': 'balanced', '3': 'full'}.get(choice, choice if choice in _MODE_KEYWORDS else 'balanced')
-    out = build_context(root, mode)
-    out_file = os.getenv('HUB_CONTEXT_FILE') or output_filename(mode)
-    Path(out_file).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_file).write_text(out, encoding='utf-8')
-    msg = f'Đã tạo `{out_file}` từ `{Path(root).resolve()}` (mode={mode}, ~{count_tokens(out):,} token). Bạn đưa file này cho chatbot khác là dùng được.'
-    return {'messages': [AIMessage(msg)]}
 
+        if choice in CANCEL:
+            return {
+                "messages": [
+                    AIMessage("Đã huỷ, không tạo file.")
+                ]
+            }
+
+        mode = {
+            "1": "map",
+            "2": "balanced",
+            "3": "full",
+        }.get(
+            choice,
+            choice if choice in _MODE_KEYWORDS else "balanced"
+        )
+
+    # 3. Tạo nội dung context
+    out = build_context(str(project_root), mode)
+
+    # 4. Luôn lưu file trong thư mục gốc của dự án
+    out_file = project_root / output_filename(mode)
+
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text(out, encoding="utf-8")
+
+    # 5. Thông báo kết quả và đường dẫn đầy đủ
+    msg = (
+        "Đã tạo PROJECT_CONTEXT thành công.\n\n"
+        f"- Dự án: `{project_root}`\n"
+        f"- Chế độ: `{mode}`\n"
+        f"- File: `{out_file.name}`\n"
+        f"- Đường dẫn đầy đủ: `{out_file}`\n"
+        f"- Dung lượng nội dung: khoảng {count_tokens(out):,} tokens"
+    )
+
+    return {
+        "messages": [AIMessage(msg)]
+    }
 
 ```
 
@@ -2129,6 +3013,7 @@ from typing import Callable
 from ..state import State
 
 AgentNode = Callable[[State], dict]
+
 
 
 ```
@@ -2164,12 +3049,66 @@ class State(TypedDict, total=False):
     output: str                       # renderer
 
 
+
 ```
 
 ### src/hub/agents/context/tools/__init__.py  [FULL]
 ```python
 """Pure, deterministic helpers. No graph/state knowledge here, so they are easy to test and reuse."""
 
+
+
+```
+
+### src/hub/agents/research/collectors/__init__.py  [FULL]
+```python
+
+```
+
+### src/hub/agents/research/controller/__init__.py  [FULL]
+```python
+
+```
+
+### src/hub/agents/research/node.py  [FULL]
+```python
+from .controller.pipeline import run_research
+
+
+def _last_user_text(state):
+    for message in reversed(state.get("messages", [])):
+        if getattr(message, "type", "") == "human":
+            content = getattr(message, "content", "")
+            return content if isinstance(content, str) else str(content)
+    return ""
+
+
+def research_node(state):
+    # Import message class only when the full Hub runtime is invoked.
+    from langchain_core.messages import AIMessage
+    query = _last_user_text(state).strip()
+    if not query:
+        return {"messages": [AIMessage("Bạn cần nhập chủ đề muốn research.", name="research")]}
+    try:
+        report = run_research(query)
+    except Exception as exc:
+        report = f"Research thất bại: {type(exc).__name__}: {exc}"
+    return {"messages": [AIMessage(content=report, name="research")]}
+
+```
+
+### src/hub/agents/research/processors/__init__.py  [FULL]
+```python
+
+```
+
+### src/hub/agents/research/ranking/__init__.py  [FULL]
+```python
+
+```
+
+### src/hub/agents/research/reporting/__init__.py  [FULL]
+```python
 
 ```
 
@@ -2203,6 +3142,7 @@ def search_node(state):
     register_builtin_tools()
     result = get_tool_registry().execute("search_project", project_root=root, query=question, max_results=30)
     return {"messages": [AIMessage(f"Project search trong `{Path(root).resolve()}`:\n\n{result}", name="search")]}
+
 
 ```
 
@@ -2254,6 +3194,7 @@ class SkillRegistry:
                 scored.append((score, skill))
         return [s for _, s in sorted(scored, key=lambda x: (-x[0], x[1].name))[:limit]]
 
+
 ```
 
 ### src/hub/state.py  [FULL]
@@ -2271,6 +3212,7 @@ class HubState(TypedDict, total=False):
     forced: str | None  # agent do người dùng chọn thẳng
     delegated: list[str]
 
+
 ```
 
 ### src/hub/tools/__init__.py  [FULL]
@@ -2278,6 +3220,7 @@ class HubState(TypedDict, total=False):
 from .registry import ToolRegistry, ToolSpec, get_tool_registry
 
 __all__ = ["ToolRegistry", "ToolSpec", "get_tool_registry"]
+
 
 ```
 
@@ -2292,6 +3235,7 @@ app = build_hub()
 png_data = app.get_graph().draw_mermaid_png()
 Path("hub_graph.png").write_bytes(png_data)
 print("Saved graph to hub_graph.png")
+
 
 ```
 
@@ -2335,6 +3279,7 @@ def test_full_and_pin(tmp_path):
 
 def out_full(tmp_path, mode):
     return build_context(str(tmp_path), mode)
+
 
 
 ```
@@ -2411,6 +3356,7 @@ def test_forced_agent_skips_llm(tmp_path, monkeypatch):
     cfg = {'configurable': {'thread_id': 't4'}}
     assert run_turn(app, 'hi', cfg, forced='echo') == 'echo-agent reply'
 
+
 ```
 
 ### tests/test_platform_features.py  [FULL]
@@ -2464,6 +3410,7 @@ def test_search_project_returns_matching_source_lines(tmp_path):
     (tmp_path / "model.py").write_text("class ResNet:\n    pass\n", encoding="utf-8")
     result = search_project(str(tmp_path), "find ResNet class")
     assert "model.py:L1" in result and "class ResNet" in result
+
 
 ```
 
@@ -2622,6 +3569,7 @@ def test_qa_spec_registered():
     assert "context" in names
 
 
+
 ```
 
 ### tests/test_qa_upgrade.py  [FULL]
@@ -2722,6 +3670,133 @@ def test_no_context(tmp_path, monkeypatch):
     assert 'Chưa có PROJECT_CONTEXT.md' in qa_node({'messages': [HumanMessage('x?')]})['messages'][0].content
 
 
+
+```
+
+### tests/test_research_agent.py  [FULL]
+```python
+from unittest.mock import Mock
+
+from hub.agents.research.controller.decision_engine import LayaDecisionEngine
+from hub.agents.research.controller.policy import choose_action
+from hub.agents.research.controller.pipeline import ResearchPipeline
+from hub.agents.research.processors.deduplicate import deduplicate
+from hub.agents.research.ranking.engine import rank_articles
+from hub.agents.research.state import Article, ResearchState
+from hub.agents.research.collectors.fetch import validate_public_url
+
+
+def test_laya_adapter_uses_typed_choice_without_gemini():
+    router = Mock()
+    router.predict.return_value = {
+        "answers": {"next_action": {"choice": "FETCH_NEXT", "confidence": 0.81}}
+    }
+    engine = LayaDecisionEngine(router=router)
+    action, confidence = engine.choose_action({"query": "AI news"})
+    assert action == "FETCH_NEXT"
+    assert confidence == 0.81
+    router.predict.assert_called_once()
+
+
+def test_laya_scores_multiple_articles_in_one_predict_call():
+    router = Mock()
+    router.predict.return_value = {
+        "answers": {
+            "article_0": {"score": 4.0},
+            "article_1": {"score": 2.0},
+        }
+    }
+    engine = LayaDecisionEngine(router=router)
+    scores = engine.score_articles([
+        {"url": "https://a.test", "title": "A"},
+        {"url": "https://b.test", "title": "B"},
+    ])
+    assert scores == {"https://a.test": 100.0, "https://b.test": 50.0}
+    router.predict.assert_called_once()
+
+
+def test_shadow_policy_logs_laya_but_uses_safe_python_policy():
+    state = ResearchState(query="AI", pending_urls=[{"url": "https://example.com"}], max_pages=2)
+    engine = Mock()
+    engine._unavailable = False
+    engine.choose_action.return_value = ("STOP", 0.99)
+    action, prediction = choose_action(state, engine, mode="shadow")
+    assert action == "FETCH_NEXT"
+    assert prediction == "STOP"
+    assert state.actions
+
+
+def test_active_policy_cannot_fetch_when_budget_exhausted():
+    state = ResearchState(query="AI", pending_urls=[{"url": "https://example.com"}],
+                          fetched_count=1, max_pages=1)
+    engine = Mock()
+    engine._unavailable = False
+    engine.choose_action.return_value = ("FETCH_NEXT", 0.99)
+    action, _ = choose_action(state, engine, mode="active")
+    assert action == "STOP"
+
+
+def test_deduplicate_removes_tracking_and_near_duplicate_titles():
+    rows = [
+        {"url": "https://example.com/story?utm_source=x", "title": "OpenAI announces new model today"},
+        {"url": "https://example.com/story?utm_source=y", "title": "OpenAI announces new model today"},
+        {"url": "https://other.com/x", "title": "OpenAI announces new model today"},
+        {"url": "https://other.com/y", "title": "NVIDIA announces new GPU"},
+    ]
+    result = deduplicate(rows)
+    assert len(result) == 2
+    assert result[0]["url"] == "https://example.com/story"
+
+
+def test_ranking_is_deterministic_and_exposes_heuristic_score():
+    articles = [
+        Article(url="https://unknown.example/a", title="A", published_at=None, content="short"),
+        Article(url="https://reuters.com/b", title="B", published_at="2026-11-15T10:00:00+00:00",
+                content="x" * 5000, corroborating_sources=["reuters.com", "bbc.com", "apnews.com"]),
+    ]
+    ranked = rank_articles(articles)
+    assert ranked[0].title == "B"
+    assert all(0 <= item.final_score <= 100 for item in ranked)
+
+
+def test_localhost_fetch_is_blocked_before_dns():
+    try:
+        validate_public_url("http://localhost/admin")
+    except ValueError as exc:
+        assert "blocked" in str(exc).lower()
+    else:
+        raise AssertionError("localhost must be blocked")
+
+
+class FakeSearcher:
+    def __init__(self):
+        self.calls = 0
+
+    def search(self, query):
+        self.calls += 1
+        if self.calls == 1:
+            return [
+                {"url": "https://reuters.com/a", "title": "AI company releases new model", "snippet": "Launch"},
+                {"url": "https://bbc.com/b", "title": "AI company releases new model", "snippet": "Details"},
+                {"url": "https://example.org/c", "title": "A different technology story", "snippet": "News"},
+            ]
+        return []
+
+
+def test_pipeline_runs_without_laya_or_gemini(monkeypatch):
+    monkeypatch.setenv("HUB_RESEARCH_LAYA_MODE", "off")
+    searcher = FakeSearcher()
+    pipeline = ResearchPipeline(searcher=searcher,
+                                fetcher=lambda url: ("article body " * 100, url))
+    pipeline.max_rounds = 1
+    pipeline.max_pages = 2
+    state, ranked = pipeline.run("AI news today")
+    assert state.fetched_count == 2
+    assert len(ranked) == 2
+    assert searcher.calls == 1
+    assert all(item.final_score >= 0 for item in ranked)
+    assert any("bbc.com" in item.corroborating_sources for item in ranked)
+
 ```
 
 ## 3. Config & docs
@@ -2744,53 +3819,51 @@ HUB_QA_HISTORY_TURNS=3
 HUB_CONTEXT_FILE=
 # Optional MCP server configuration as JSON; install the [mcp] extra first
 # HUB_MCP_SERVERS={}
+
+# Research Agent (Laya decision model; no Gemini calls inside the research loop)
+HUB_LAYA_MODEL=multilingual
+HUB_LAYA_DEVICE=cpu
+# shadow = observe Laya but execute deterministic safe policy (recommended initially)
+# active = let Laya choose bounded actions; requires local benchmark first
+# off = disable Laya entirely
+HUB_RESEARCH_LAYA_MODE=shadow
+HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
+HUB_RESEARCH_MAX_PAGES=12
+HUB_RESEARCH_RESULTS_PER_QUERY=12
 ```
 
 ### README.md  [CONFIG]
 ```markdown
 # Agent Hub
 
-Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và Gemini. Bản nâng cấp giữ lại Context Agent, QA Agent, model failover và CLI hiện tại; bổ sung Search Agent, điều phối đa agent, memory bền vững, skills, shared tool registry và MCP bridge tùy chọn.
+Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và Gemini. Phiên bản này giữ lại Context, QA, Search, Supervisor, Orchestrator, memory, skills, tool registry và MCP bridge; bổ sung Research Agent dùng Laya.
 
-| Agent | Chức năng | LLM |
+| Agent | Chức năng | Model |
 |---|---|---|
-| `qa` | Hỏi đáp, phân tích kiến trúc/source code dựa trên context và đọc thêm code khi cần | Gemini |
-| `search` | Tìm kiếm read-only trong source dự án | Không |
-| `context` | Tạo mới project context | Không |
+| `qa` | Hỏi đáp, phân tích kiến trúc/source code | Gemini |
+| `search` | Tìm kiếm read-only trong source dự án | Python |
+| `context` | Tạo/cập nhật Project Context | Python |
+| `research` | Search web, fetch, extract, deduplicate, verify và rank bài viết | Laya + Python; không gọi Gemini trong research loop |
 
-## Kiến trúc
+## Architecture
 
 ```text
 CLI
- ├── Supervisor (route một agent hoặc lập kế hoạch delegate)
- │    ├── QA Agent
- │    ├── Context Agent
- │    ├── Search Agent
- │    └── Orchestrator (chạy các agent parallel-safe độc lập)
- ├── ModelRouter (preferred model theo agent + fallback pool)
- ├── Memory
- │    ├── SQLite: lịch sử hội thoại theo thread
- │    ├── ~/.agent-hub/user_memory.md: ghi chú người dùng do người dùng thêm
- │    └── .hub/project_memory.md: ghi chú riêng của dự án
- ├── Skills: skills/<name>/SKILL.md và ~/.agent-hub/skills/<name>/SKILL.md
- └── Shared Tool Registry (built-in tools + MCP tools tùy chọn)
+  -> Supervisor
+      -> QA / Search / Context / Research
+      -> Orchestrator (chỉ phối hợp các agent parallel-safe)
+
+Research Agent
+  -> Research Controller
+  -> Laya Decision Engine (lazy-loaded, multilingual)
+  -> Python tools: Search / Fetch / Extract / Deduplicate / Verify
+  -> Laya experimental scoring + deterministic ranking baseline
+  -> Report
 ```
 
-### Thành phần
+Research Agent là agent độc lập, `parallel_safe=False`. Laya là decision engine bên trong Research Agent, không phải agent ngang hàng. Research Agent không import ModelRouter và không gọi Gemini trong vòng lặp tìm kiếm/thu thập.
 
-| Thành phần | Trách nhiệm |
-|---|---|
-| Supervisor | Chọn agent phù hợp; chỉ delegate khi có từ hai agent `parallel_safe` phù hợp |
-| Orchestrator | Chạy các subagent độc lập song song, tổng hợp kết quả |
-| ModelRouter | Ưu tiên model cấu hình riêng của agent, sau đó failover theo `HUB_MODELS` |
-| MemoryStore | Lưu lịch sử chat vào SQLite; hỗ trợ user/project Markdown memory |
-| SkillRegistry | Nạp `SKILL.md`, chọn skill liên quan và đưa hướng dẫn vào QA context |
-| ToolRegistry | Đăng ký và gọi tool tập trung; tool có side effect có thể yêu cầu xác nhận |
-| MCP bridge | Nạp MCP tools nếu cài adapter và khai báo server; mặc định tắt |
-
-`context` không được đánh dấu parallel-safe vì nó ghi file và có thể yêu cầu input. `qa` là read-only nên được phép tham gia delegation song song.
-
-## Cài đặt
+## Install
 
 Yêu cầu Python 3.11+.
 
@@ -2798,89 +3871,82 @@ Yêu cầu Python 3.11+.
 python -m venv .venv
 # Windows PowerShell: .venv\\Scripts\\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[research,dev]"
 cp .env.example .env
 ```
 
-Điền `GOOGLE_API_KEY` vào `.env`, sau đó chạy:
+Điền `GOOGLE_API_KEY` nếu dùng QA/Supervisor. Research Agent không cần Gemini API key. Laya và các thư viện research được cài qua optional extra `research`.
 
-```bash
-hub
-```
-
-Không commit `.env`, SQLite database hoặc dữ liệu memory cá nhân.
-
-## CLI commands
-
-| Lệnh | Chức năng |
-|---|---|
-| `/qa <câu hỏi>` | Gọi QA trực tiếp, bỏ qua supervisor |
-| `/context <yêu cầu>` | Tạo project context |
-| `/search <từ khóa>` | Tìm kiếm trong source dự án |
-| `/agents` | Liệt kê agent đã đăng ký |
-| `/models` | Xem model pool, số request và cooldown |
-| `/skills` | Liệt kê skills được tìm thấy |
-| `/tools` | Liệt kê shared tools |
-| `/tool <name> <JSON>` | Gọi tool; tool có side effect sẽ hỏi xác nhận |
-| `/history` | Xem lịch sử thread hiện tại |
-| `/memory` | Xem user memory |
-| `/memory add <ghi chú>` | Thêm ghi chú vào user memory (chủ động, không tự trích xuất) |
-| `/reset` | Tạo thread mới; lịch sử thread cũ vẫn nằm trong SQLite |
-| `/help` | Hướng dẫn |
-
-Lịch sử chat được lưu tại `~/.agent-hub/hub.sqlite3` (có thể đổi bằng `HUB_DATA_DIR`). Khi khởi động lại, CLI tiếp tục thread gần nhất. `/reset` tạo thread mới chứ không xóa dữ liệu cũ.
-
-## Memory
-
-- **Conversation memory:** SQLite, bền vững qua lần chạy lại chương trình.
-- **User memory:** `~/.agent-hub/user_memory.md`; chỉ lưu khi người dùng gọi `/memory add`.
-- **Project memory:** `.hub/project_memory.md` trong repository; QA nạp nội dung này khi trả lời dự án đó.
-
-Memory được đưa vào prompt như dữ liệu tham khảo, không phải chỉ thị hệ thống. Không lưu API key, mật khẩu hoặc thông tin bí mật vào memory.
-
-## Skills
-
-Tạo skill theo cấu trúc:
+## CLI
 
 ```text
-skills/
-└── code-review/
-    └── SKILL.md
+hub
+/research Tin tức AI mới nhất hôm nay
+/qa Giải thích ModelRouter
+/search ModelRouter
+/context full cho .
+/agents
+/models
+/help
 ```
 
-`SKILL.md` có thể có metadata `description:` ở đầu file. QA tự chọn tối đa ba skill có nội dung liên quan đến câu hỏi. Có thể cài skill dùng chung tại `~/.agent-hub/skills/<skill-name>/SKILL.md`.
+Các lệnh `/qa`, `/search`, `/context`, `/research` gọi agent trực tiếp và bỏ qua Supervisor routing. Câu hỏi không có prefix sẽ được Supervisor định tuyến.
 
-## Shared tools và quyền
+## Research Agent (Laya)
 
-Built-in tools hiện tại:
+- Search: `ddgs` (DuckDuckGo search).
+- Fetch: `requests`, chỉ HTTP(S), kiểm tra public IP, chặn localhost/private/reserved IP, giới hạn redirect, timeout và 2 MB/trang.
+- Extract: Trafilatura; BeautifulSoup là fallback.
+- Processing: Python dedup URL/title, giữ evidence từ nhiều domain để đo corroboration.
+- Decision: Laya chọn trong tập action hữu hạn `FETCH_NEXT`, `SEARCH_MORE`, `VERIFY_TOP`, `STOP`.
+- Ranking: baseline minh bạch kết hợp freshness, heuristic source quality, corroboration và độ đầy đủ nội dung. Laya ordinal score được lưu riêng và chỉ ảnh hưởng final score ở chế độ `active`.
 
-- `read_file`: đọc file trong project root, chặn path traversal.
-- `read_function`: trích function/class từ file dự án.
-- `search_project`: tìm chuỗi trong file text dự án.
+### Laya modes
 
-Tool khai báo `requires_confirmation=True` sẽ yêu cầu xác nhận khi gọi qua `/tool`. MCP tools mặc định luôn yêu cầu xác nhận. Không đăng ký tool xóa file hoặc chạy shell tùy ý nếu chưa có lớp phê duyệt riêng.
+`HUB_RESEARCH_LAYA_MODE=shadow` là mặc định. Laya được gọi để dự đoán action và chấm điểm, nhưng Python policy vẫn quyết định thao tác thật và ranking vẫn dùng baseline. Đây là chế độ nên dùng để benchmark.
 
-## MCP (tùy chọn)
+- `shadow`: chạy song song để so sánh, không để Laya điều khiển thực tế.
+- `active`: cho Laya chọn action và kết hợp điểm Laya vào ranking; chỉ bật sau benchmark held-out.
+- `off`: không load Laya; dùng Python policy và ranking baseline.
 
-Cài adapter:
+Cấu hình trong `.env`:
+
+```env
+HUB_LAYA_MODEL=multilingual
+HUB_LAYA_DEVICE=cpu
+HUB_RESEARCH_LAYA_MODE=shadow
+HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
+HUB_RESEARCH_MAX_PAGES=12
+HUB_RESEARCH_RESULTS_PER_QUERY=12
+```
+
+Laya được load lazy và tái sử dụng trong process. Để tránh Gemini token, research loop không gọi QA, Gemini hoặc Supervisor ở từng trang. Chỉ một lần routing ở Supervisor có thể phát sinh Gemini khi người dùng không gọi trực tiếp `/research`.
+
+### Important model limitation
+
+Model card hiện công bố checkpoint base multilingual đạt 0.342 trên benchmark typed-decisions, thấp hơn majority baseline 0.461 của benchmark đó. Đây không phải benchmark research tiếng Việt, nhưng đủ để không tin zero-shot decisions ngay. Vì vậy chế độ `shadow` là mặc định; không coi confidence là bảo đảm đúng.
+
+Điểm hiện tại **không phải điểm viral/trending**: pipeline chưa lấy view/share/engagement từ nền tảng mạng xã hội. Nó xếp hạng theo độ mới, tín hiệu uy tín nguồn, sự xác nhận từ domain khác và độ đầy đủ nội dung. Ngày đăng thiếu sẽ bị giảm tín hiệu thay vì tự bịa ngày.
+
+### Benchmark Laya
+
+Tạo JSONL theo schema trong `benchmarks/README.md`, sau đó chạy:
 
 ```bash
-pip install -e ".[mcp]"
+python scripts/benchmark_laya_research.py benchmarks/my_labels.jsonl
 ```
 
-`HUB_MCP_SERVERS` nhận JSON cấu hình theo định dạng `MultiServerMCPClient` của `langchain-mcp-adapters`. MCP bridge hiện là lớp nạp tool tùy chọn; chưa tự khởi động server MCP nếu biến này trống. Chỉ kết nối server tin cậy và cấp quyền tối thiểu.
+Chỉ chuyển `active` khi Laya vượt baseline trên tập held-out, có kết quả theo từng loại action và ranking được kiểm tra bằng nhãn người dùng.
 
-## Model routing
+## Other components
 
-- `HUB_MODELS`: danh sách model fallback, phân tách bằng dấu phẩy.
-- `HUB_MODEL_QA`: model ưu tiên cho QA.
-- `HUB_MODEL_SUPERVISOR`: model ưu tiên cho supervisor.
-
-Nếu model riêng lỗi có thể retry, router tiếp tục thử các model còn lại trong pool. Không cấu hình model riêng thì dùng pool chung.
-
-## Thêm agent
-
-Tạo `src/hub/agents/<name>/` và export `SPEC` kiểu `AgentSpec`. Đặt `parallel_safe=True` chỉ khi agent không yêu cầu interrupt/input và không gây side effect không an toàn khi chạy đồng thời. Đăng ký agent trong `src/hub/registry.py`.
+- **Supervisor:** chọn agent phù hợp; chỉ delegate nhiều agent `parallel_safe`.
+- **Orchestrator:** chạy các subagent độc lập song song và tổng hợp kết quả.
+- **ModelRouter:** preferred model theo agent và Gemini fallback pool.
+- **MemoryStore:** SQLite conversation history; user/project Markdown memory.
+- **SkillRegistry:** nạp `SKILL.md`.
+- **ToolRegistry:** shared tools; tool có side effect yêu cầu xác nhận.
+- **MCP:** tùy chọn, cấu hình bằng `HUB_MCP_SERVERS`.
 
 ## Tests
 
@@ -2888,7 +3954,34 @@ Tạo `src/hub/agents/<name>/` và export `SPEC` kiểu `AgentSpec`. Đặt `par
 pytest -q
 ```
 
-Các test hiện có dùng mock LLM, không cần API key. MCP integration cần được kiểm thử riêng với MCP server thực tế.
+Research tests không cần tải model Laya hoặc gọi Internet vì sử dụng mock search/fetch/model. MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.
+```
+
+### benchmarks/README.md  [CONFIG]
+```markdown
+# Laya research benchmark data
+
+Create a JSONL file with human-labelled examples. Keep a held-out test split; do not tune prompts on it.
+
+Action row:
+
+```json
+{"kind":"action","state":{"query":"AI news","search_rounds":1,"fetched_count":5,"pending_count":3,"article_count":5,"max_search_rounds":2,"max_pages":12},"expected":"FETCH_NEXT"}
+```
+
+Article-score row (expected is an ordinal label from 0 to 4):
+
+```json
+{"kind":"article_score","article":{"url":"https://example.org/news","title":"Example AI announcement","source":"example.org","published_at":"2026-11-15T09:00:00+00:00","content":"Short factual article excerpt..."},"expected":3}
+```
+
+Run:
+
+```bash
+python scripts/benchmark_laya_research.py benchmarks/my_labels.jsonl
+```
+
+Label examples using a written rubric. For ranking, compare pairwise ordering or Spearman correlation in addition to score MAE. Do not enable active mode based only on training-set accuracy.
 ```
 
 ### pyproject.toml  [CONFIG]
@@ -2910,6 +4003,7 @@ dependencies = [
 tokens = ["tiktoken"]   # exact token counts; otherwise chars/4 estimate
 dev = ["pytest"]
 mcp = ["langchain-mcp-adapters"]
+research = ["laya>=0.3.20", "ddgs>=9.0", "requests>=2.31", "trafilatura>=2.0", "beautifulsoup4>=4.12"]
 
 [project.scripts]
 hub = "hub.cli:main"                                # chat with the multi-agent hub

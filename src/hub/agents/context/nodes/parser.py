@@ -18,3 +18,4 @@ def parser_node(state: State) -> dict:
         parsed[f] = {'kind': kind, 'skeleton': skeleton, 'clean': a['clean'], 'imports': a['imports'], 'has_main': a['has_main']}
     return {'parsed': parsed}
 
+

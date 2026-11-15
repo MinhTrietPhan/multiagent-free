@@ -16,3 +16,4 @@ def count_tokens(text: str) -> int:
         return len(_enc.encode(text, disallowed_special=()))
     return max(1, len(text) // 4)
 
+

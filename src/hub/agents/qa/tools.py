@@ -239,3 +239,4 @@ def find_project_root_from_context(context_text: str) -> str | None:
                 return str(candidate.resolve())
     return None
 
+

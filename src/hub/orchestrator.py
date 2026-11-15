@@ -24,3 +24,4 @@ def make_orchestrator(agents):
         body = "\n\n".join(f"### {name}\n{outputs[name]}" for name in sorted(outputs))
         return {"messages": [AIMessage(content=body, name="orchestrator")]}
     return orchestrator
+

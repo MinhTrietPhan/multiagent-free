@@ -17,3 +17,4 @@ async def load_mcp_tools(registry: ToolRegistry):
     for tool in tools:
         registry.register(ToolSpec(name=tool.name, description=tool.description or "MCP tool", handler=(lambda _tool=tool, **kwargs: _tool.invoke(kwargs)), requires_confirmation=True, source="mcp"), replace=True)
     return tools
+

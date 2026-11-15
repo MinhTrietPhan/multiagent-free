@@ -37,3 +37,4 @@ def test_full_and_pin(tmp_path):
 def out_full(tmp_path, mode):
     return build_context(str(tmp_path), mode)
 
+

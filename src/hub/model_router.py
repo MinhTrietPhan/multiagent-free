@@ -127,3 +127,4 @@ def get_llm(agent: str | None = None):
     """Return the shared ModelRouter, optionally using an agent-specific preferred model."""
     return get_model_router(agent)
 
+

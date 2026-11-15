@@ -43,3 +43,4 @@ class SkillRegistry:
             if score:
                 scored.append((score, skill))
         return [s for _, s in sorted(scored, key=lambda x: (-x[0], x[1].name))[:limit]]
+

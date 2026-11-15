@@ -67,3 +67,4 @@ def test_forced_agent_skips_llm(tmp_path, monkeypatch):
     app = build_hub([context_spec, echo], llm_factory=lambda: (_ for _ in ()).throw(AssertionError('LLM called')))
     cfg = {'configurable': {'thread_id': 't4'}}
     assert run_turn(app, 'hi', cfg, forced='echo') == 'echo-agent reply'
+

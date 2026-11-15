@@ -93,3 +93,4 @@ def test_no_context(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert 'Chưa có PROJECT_CONTEXT.md' in qa_node({'messages': [HumanMessage('x?')]})['messages'][0].content
 
+

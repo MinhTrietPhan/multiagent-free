@@ -44,6 +44,11 @@ def make_supervisor(agents: list[AgentSpec], llm_factory=get_llm):
             return {"next": "context", "delegated": []}
         if "search" in names and request.startswith(("search ", "tìm trong source", "tìm kiếm trong code", "grep ")):
             return {"next": "search", "delegated": []}
+        if "research" in names and request.startswith((
+            "research ", "web research", "tìm kiếm web", "tìm tin tức",
+            "tin tức ", "tìm thông tin trên internet", "tìm kiếm trên internet"
+        )):
+            return {"next": "research", "delegated": []}
         if len(agents) == 1:
             return {"next": names[0], "delegated": []}
         prompt = PROMPT.format(catalog=catalog, request=request, default=names[0])
@@ -58,3 +63,4 @@ def make_supervisor(agents: list[AgentSpec], llm_factory=get_llm):
             return {"next": "orchestrator", "delegated": selected}
         return {"next": route.agent if route.agent in names else names[0], "delegated": []}
     return supervisor
+

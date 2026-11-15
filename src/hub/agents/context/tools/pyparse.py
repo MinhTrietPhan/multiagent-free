@@ -64,3 +64,4 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
     _walk_defs(tree.body, 0, loc, skel)
     return {'skeleton': skel, 'clean': source if keep_source else ast.unparse(tree), 'imports': imports, 'has_main': any((_is_main_guard(n) for n in tree.body))}
 
+

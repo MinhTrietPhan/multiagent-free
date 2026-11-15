@@ -26,3 +26,4 @@ def search_node(state):
     register_builtin_tools()
     result = get_tool_registry().execute("search_project", project_root=root, query=question, max_results=30)
     return {"messages": [AIMessage(f"Project search trong `{Path(root).resolve()}`:\n\n{result}", name="search")]}
+

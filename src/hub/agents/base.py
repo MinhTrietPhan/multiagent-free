@@ -20,3 +20,4 @@ class AgentSpec:
     node: Callable[[dict], dict]
     parallel_safe: bool = False
 
+

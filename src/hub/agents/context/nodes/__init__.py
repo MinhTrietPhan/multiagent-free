@@ -14,3 +14,4 @@ PIPELINE: list[tuple[str, AgentNode]] = [
     ("renderer", renderer_node),
 ]
 
+

@@ -29,3 +29,4 @@ def build_context(root: str, mode: str = DEFAULT_MODE, budget: int | None = ...,
     )
     return result["output"]
 
+

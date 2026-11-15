@@ -47,3 +47,4 @@ def test_search_project_returns_matching_source_lines(tmp_path):
     (tmp_path / "model.py").write_text("class ResNet:\n    pass\n", encoding="utf-8")
     result = search_project(str(tmp_path), "find ResNet class")
     assert "model.py:L1" in result and "class ResNet" in result
+

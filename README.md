@@ -1,46 +1,33 @@
 # Agent Hub
 
-Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và Gemini. Bản nâng cấp giữ lại Context Agent, QA Agent, model failover và CLI hiện tại; bổ sung Search Agent, điều phối đa agent, memory bền vững, skills, shared tool registry và MCP bridge tùy chọn.
+Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và Gemini. Phiên bản này giữ lại Context, QA, Search, Supervisor, Orchestrator, memory, skills, tool registry và MCP bridge; bổ sung Research Agent dùng Laya.
 
-| Agent | Chức năng | LLM |
+| Agent | Chức năng | Model |
 |---|---|---|
-| `qa` | Hỏi đáp, phân tích kiến trúc/source code dựa trên context và đọc thêm code khi cần | Gemini |
-| `search` | Tìm kiếm read-only trong source dự án | Không |
-| `context` | Tạo mới project context | Không |
+| `qa` | Hỏi đáp, phân tích kiến trúc/source code | Gemini |
+| `search` | Tìm kiếm read-only trong source dự án | Python |
+| `context` | Tạo/cập nhật Project Context | Python |
+| `research` | Search web, fetch, extract, deduplicate, verify và rank bài viết | Laya + Python; không gọi Gemini trong research loop |
 
-## Kiến trúc
+## Architecture
 
 ```text
 CLI
- ├── Supervisor (route một agent hoặc lập kế hoạch delegate)
- │    ├── QA Agent
- │    ├── Context Agent
- │    ├── Search Agent
- │    └── Orchestrator (chạy các agent parallel-safe độc lập)
- ├── ModelRouter (preferred model theo agent + fallback pool)
- ├── Memory
- │    ├── SQLite: lịch sử hội thoại theo thread
- │    ├── ~/.agent-hub/user_memory.md: ghi chú người dùng do người dùng thêm
- │    └── .hub/project_memory.md: ghi chú riêng của dự án
- ├── Skills: skills/<name>/SKILL.md và ~/.agent-hub/skills/<name>/SKILL.md
- └── Shared Tool Registry (built-in tools + MCP tools tùy chọn)
+  -> Supervisor
+      -> QA / Search / Context / Research
+      -> Orchestrator (chỉ phối hợp các agent parallel-safe)
+
+Research Agent
+  -> Research Controller
+  -> Laya Decision Engine (lazy-loaded, multilingual)
+  -> Python tools: Search / Fetch / Extract / Deduplicate / Verify
+  -> Laya experimental scoring + deterministic ranking baseline
+  -> Report
 ```
 
-### Thành phần
+Research Agent là agent độc lập, `parallel_safe=False`. Laya là decision engine bên trong Research Agent, không phải agent ngang hàng. Research Agent không import ModelRouter và không gọi Gemini trong vòng lặp tìm kiếm/thu thập.
 
-| Thành phần | Trách nhiệm |
-|---|---|
-| Supervisor | Chọn agent phù hợp; chỉ delegate khi có từ hai agent `parallel_safe` phù hợp |
-| Orchestrator | Chạy các subagent độc lập song song, tổng hợp kết quả |
-| ModelRouter | Ưu tiên model cấu hình riêng của agent, sau đó failover theo `HUB_MODELS` |
-| MemoryStore | Lưu lịch sử chat vào SQLite; hỗ trợ user/project Markdown memory |
-| SkillRegistry | Nạp `SKILL.md`, chọn skill liên quan và đưa hướng dẫn vào QA context |
-| ToolRegistry | Đăng ký và gọi tool tập trung; tool có side effect có thể yêu cầu xác nhận |
-| MCP bridge | Nạp MCP tools nếu cài adapter và khai báo server; mặc định tắt |
-
-`context` không được đánh dấu parallel-safe vì nó ghi file và có thể yêu cầu input. `qa` là read-only nên được phép tham gia delegation song song.
-
-## Cài đặt
+## Install
 
 Yêu cầu Python 3.11+.
 
@@ -48,89 +35,82 @@ Yêu cầu Python 3.11+.
 python -m venv .venv
 # Windows PowerShell: .venv\\Scripts\\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[research,dev]"
 cp .env.example .env
 ```
 
-Điền `GOOGLE_API_KEY` vào `.env`, sau đó chạy:
+Điền `GOOGLE_API_KEY` nếu dùng QA/Supervisor. Research Agent không cần Gemini API key. Laya và các thư viện research được cài qua optional extra `research`.
 
-```bash
-hub
-```
-
-Không commit `.env`, SQLite database hoặc dữ liệu memory cá nhân.
-
-## CLI commands
-
-| Lệnh | Chức năng |
-|---|---|
-| `/qa <câu hỏi>` | Gọi QA trực tiếp, bỏ qua supervisor |
-| `/context <yêu cầu>` | Tạo project context |
-| `/search <từ khóa>` | Tìm kiếm trong source dự án |
-| `/agents` | Liệt kê agent đã đăng ký |
-| `/models` | Xem model pool, số request và cooldown |
-| `/skills` | Liệt kê skills được tìm thấy |
-| `/tools` | Liệt kê shared tools |
-| `/tool <name> <JSON>` | Gọi tool; tool có side effect sẽ hỏi xác nhận |
-| `/history` | Xem lịch sử thread hiện tại |
-| `/memory` | Xem user memory |
-| `/memory add <ghi chú>` | Thêm ghi chú vào user memory (chủ động, không tự trích xuất) |
-| `/reset` | Tạo thread mới; lịch sử thread cũ vẫn nằm trong SQLite |
-| `/help` | Hướng dẫn |
-
-Lịch sử chat được lưu tại `~/.agent-hub/hub.sqlite3` (có thể đổi bằng `HUB_DATA_DIR`). Khi khởi động lại, CLI tiếp tục thread gần nhất. `/reset` tạo thread mới chứ không xóa dữ liệu cũ.
-
-## Memory
-
-- **Conversation memory:** SQLite, bền vững qua lần chạy lại chương trình.
-- **User memory:** `~/.agent-hub/user_memory.md`; chỉ lưu khi người dùng gọi `/memory add`.
-- **Project memory:** `.hub/project_memory.md` trong repository; QA nạp nội dung này khi trả lời dự án đó.
-
-Memory được đưa vào prompt như dữ liệu tham khảo, không phải chỉ thị hệ thống. Không lưu API key, mật khẩu hoặc thông tin bí mật vào memory.
-
-## Skills
-
-Tạo skill theo cấu trúc:
+## CLI
 
 ```text
-skills/
-└── code-review/
-    └── SKILL.md
+hub
+/research Tin tức AI mới nhất hôm nay
+/qa Giải thích ModelRouter
+/search ModelRouter
+/context full cho .
+/agents
+/models
+/help
 ```
 
-`SKILL.md` có thể có metadata `description:` ở đầu file. QA tự chọn tối đa ba skill có nội dung liên quan đến câu hỏi. Có thể cài skill dùng chung tại `~/.agent-hub/skills/<skill-name>/SKILL.md`.
+Các lệnh `/qa`, `/search`, `/context`, `/research` gọi agent trực tiếp và bỏ qua Supervisor routing. Câu hỏi không có prefix sẽ được Supervisor định tuyến.
 
-## Shared tools và quyền
+## Research Agent (Laya)
 
-Built-in tools hiện tại:
+- Search: `ddgs` (DuckDuckGo search).
+- Fetch: `requests`, chỉ HTTP(S), kiểm tra public IP, chặn localhost/private/reserved IP, giới hạn redirect, timeout và 2 MB/trang.
+- Extract: Trafilatura; BeautifulSoup là fallback.
+- Processing: Python dedup URL/title, giữ evidence từ nhiều domain để đo corroboration.
+- Decision: Laya chọn trong tập action hữu hạn `FETCH_NEXT`, `SEARCH_MORE`, `VERIFY_TOP`, `STOP`.
+- Ranking: baseline minh bạch kết hợp freshness, heuristic source quality, corroboration và độ đầy đủ nội dung. Laya ordinal score được lưu riêng và chỉ ảnh hưởng final score ở chế độ `active`.
 
-- `read_file`: đọc file trong project root, chặn path traversal.
-- `read_function`: trích function/class từ file dự án.
-- `search_project`: tìm chuỗi trong file text dự án.
+### Laya modes
 
-Tool khai báo `requires_confirmation=True` sẽ yêu cầu xác nhận khi gọi qua `/tool`. MCP tools mặc định luôn yêu cầu xác nhận. Không đăng ký tool xóa file hoặc chạy shell tùy ý nếu chưa có lớp phê duyệt riêng.
+`HUB_RESEARCH_LAYA_MODE=shadow` là mặc định. Laya được gọi để dự đoán action và chấm điểm, nhưng Python policy vẫn quyết định thao tác thật và ranking vẫn dùng baseline. Đây là chế độ nên dùng để benchmark.
 
-## MCP (tùy chọn)
+- `shadow`: chạy song song để so sánh, không để Laya điều khiển thực tế.
+- `active`: cho Laya chọn action và kết hợp điểm Laya vào ranking; chỉ bật sau benchmark held-out.
+- `off`: không load Laya; dùng Python policy và ranking baseline.
 
-Cài adapter:
+Cấu hình trong `.env`:
+
+```env
+HUB_LAYA_MODEL=multilingual
+HUB_LAYA_DEVICE=cpu
+HUB_RESEARCH_LAYA_MODE=shadow
+HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
+HUB_RESEARCH_MAX_PAGES=12
+HUB_RESEARCH_RESULTS_PER_QUERY=12
+```
+
+Laya được load lazy và tái sử dụng trong process. Để tránh Gemini token, research loop không gọi QA, Gemini hoặc Supervisor ở từng trang. Chỉ một lần routing ở Supervisor có thể phát sinh Gemini khi người dùng không gọi trực tiếp `/research`.
+
+### Important model limitation
+
+Model card hiện công bố checkpoint base multilingual đạt 0.342 trên benchmark typed-decisions, thấp hơn majority baseline 0.461 của benchmark đó. Đây không phải benchmark research tiếng Việt, nhưng đủ để không tin zero-shot decisions ngay. Vì vậy chế độ `shadow` là mặc định; không coi confidence là bảo đảm đúng.
+
+Điểm hiện tại **không phải điểm viral/trending**: pipeline chưa lấy view/share/engagement từ nền tảng mạng xã hội. Nó xếp hạng theo độ mới, tín hiệu uy tín nguồn, sự xác nhận từ domain khác và độ đầy đủ nội dung. Ngày đăng thiếu sẽ bị giảm tín hiệu thay vì tự bịa ngày.
+
+### Benchmark Laya
+
+Tạo JSONL theo schema trong `benchmarks/README.md`, sau đó chạy:
 
 ```bash
-pip install -e ".[mcp]"
+python scripts/benchmark_laya_research.py benchmarks/my_labels.jsonl
 ```
 
-`HUB_MCP_SERVERS` nhận JSON cấu hình theo định dạng `MultiServerMCPClient` của `langchain-mcp-adapters`. MCP bridge hiện là lớp nạp tool tùy chọn; chưa tự khởi động server MCP nếu biến này trống. Chỉ kết nối server tin cậy và cấp quyền tối thiểu.
+Chỉ chuyển `active` khi Laya vượt baseline trên tập held-out, có kết quả theo từng loại action và ranking được kiểm tra bằng nhãn người dùng.
 
-## Model routing
+## Other components
 
-- `HUB_MODELS`: danh sách model fallback, phân tách bằng dấu phẩy.
-- `HUB_MODEL_QA`: model ưu tiên cho QA.
-- `HUB_MODEL_SUPERVISOR`: model ưu tiên cho supervisor.
-
-Nếu model riêng lỗi có thể retry, router tiếp tục thử các model còn lại trong pool. Không cấu hình model riêng thì dùng pool chung.
-
-## Thêm agent
-
-Tạo `src/hub/agents/<name>/` và export `SPEC` kiểu `AgentSpec`. Đặt `parallel_safe=True` chỉ khi agent không yêu cầu interrupt/input và không gây side effect không an toàn khi chạy đồng thời. Đăng ký agent trong `src/hub/registry.py`.
+- **Supervisor:** chọn agent phù hợp; chỉ delegate nhiều agent `parallel_safe`.
+- **Orchestrator:** chạy các subagent độc lập song song và tổng hợp kết quả.
+- **ModelRouter:** preferred model theo agent và Gemini fallback pool.
+- **MemoryStore:** SQLite conversation history; user/project Markdown memory.
+- **SkillRegistry:** nạp `SKILL.md`.
+- **ToolRegistry:** shared tools; tool có side effect yêu cầu xác nhận.
+- **MCP:** tùy chọn, cấu hình bằng `HUB_MCP_SERVERS`.
 
 ## Tests
 
@@ -138,4 +118,4 @@ Tạo `src/hub/agents/<name>/` và export `SPEC` kiểu `AgentSpec`. Đặt `par
 pytest -q
 ```
 
-Các test hiện có dùng mock LLM, không cần API key. MCP integration cần được kiểm thử riêng với MCP server thực tế.
+Research tests không cần tải model Laya hoặc gọi Internet vì sử dụng mock search/fetch/model. MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.

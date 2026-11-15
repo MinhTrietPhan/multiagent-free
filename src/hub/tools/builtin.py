@@ -52,3 +52,4 @@ def register_builtin_tools():
         except ValueError:
             pass
     return registry
+

@@ -7,3 +7,4 @@ SPEC = AgentSpec(
     node=search_node,
     parallel_safe=True,
 )
+

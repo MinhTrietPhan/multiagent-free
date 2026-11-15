@@ -61,3 +61,4 @@ def render_tree(paths: list[str]) -> str:
     walk(tree)
     return '\n'.join(lines)
 
+

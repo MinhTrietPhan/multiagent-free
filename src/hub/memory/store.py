@@ -62,3 +62,4 @@ class MemoryStore:
     def read_project_memory(root: str | Path = ".") -> str:
         p = Path(root) / ".hub" / "project_memory.md"
         return p.read_text(encoding="utf-8") if p.is_file() else ""
+

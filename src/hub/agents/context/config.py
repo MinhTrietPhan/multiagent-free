@@ -17,3 +17,4 @@ def output_filename(mode: str) -> str:
     """Tên file theo mức ngữ cảnh: map -> PROJECT_CONTEXT_map.md, balanced -> ..._balanced.md, full -> ..._full.md."""
     return OUTPUT_FILE_TEMPLATE.format(mode=mode)
 
+
