@@ -1,0 +1,4 @@
+Copy the contents of this patch folder into the root of your existing agent-hub repository, preserving folder structure and replacing pyproject.toml and .env.example when prompted.
+Do NOT replace your actual .env file. Add the Telegram variables from .env.example to it manually.
+Then run: pip install -e ".[research,telegram]"
+Then configure HUB_TELEGRAM_BOT_TOKEN and HUB_TELEGRAM_ALLOWED_USER_ID in .env and run: hub-telegram

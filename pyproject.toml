@@ -16,10 +16,12 @@ tokens = ["tiktoken"]   # exact token counts; otherwise chars/4 estimate
 dev = ["pytest"]
 mcp = ["langchain-mcp-adapters"]
 research = ["laya>=0.3.20", "ddgs>=9.0", "requests>=2.31", "trafilatura>=2.0", "beautifulsoup4>=4.12"]
+telegram = ["python-telegram-bot>=21,<23"]
 
 [project.scripts]
 hub = "hub.cli:main"                                # chat with the multi-agent hub
 repo-context = "hub.agents.context.cli:main"        # run the context agent alone (no LLM)
+hub-telegram = "hub.interfaces.telegram.bot:main"   # private Telegram interface
 
 [build-system]
 requires = ["setuptools>=68"]

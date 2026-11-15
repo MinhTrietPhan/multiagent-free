@@ -1,3 +1,4 @@
+
 """Chat loop. Handles agent questions (interrupts) transparently.
 
 Chọn agent thẳng:  /qa <câu hỏi>   /context <yêu cầu>   -> bỏ qua bước LLM điều phối (đỡ tốn request).
@@ -6,6 +7,7 @@ Lệnh:              /help  /agents  /models  /reset
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 import os
+import re
 import shutil
 import sys
 import textwrap
@@ -99,6 +101,37 @@ def _wrap_reply(reply: str, width: int | None = None) -> list[str]:
     return output
 
 
+def _terminal_markdown(reply: str, enabled: bool) -> str:
+    """Render common Markdown constructs without requiring a terminal UI dependency."""
+    output: list[str] = []
+    in_code = False
+    for raw in str(reply).replace("\r\n", "\n").split("\n"):
+        line = raw.rstrip()
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            if line.strip() == "```":
+                output.append(_paint("  ── code ──", "dim", enabled))
+            continue
+        if in_code:
+            output.append(_paint("  " + line, "blue", enabled))
+            continue
+        if re.match(r"^\s*\|?\s*:?-{3,}", line):
+            continue  # Markdown table separator
+        if "|" in line and line.strip().startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            output.append("  " + "  │  ".join(cells))
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if heading:
+            output.append(_paint(heading.group(2), "cyan", enabled, bold=True))
+            continue
+        line = re.sub(r"`([^`]+)`", lambda m: _paint(m.group(1), "yellow", enabled), line)
+        line = re.sub(r"\*\*(.+?)\*\*", lambda m: _paint(m.group(1), "bold", enabled, bold=True), line)
+        line = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", line)
+        output.append(line)
+    return "\n".join(output)
+
+
 def print_agent_reply(agent: str, reply: str, *, model: str | None = None, stream=None) -> None:
     """Render a readable, boxed assistant response with a stable agent label."""
     stream = stream or sys.stdout
@@ -110,7 +143,7 @@ def print_agent_reply(agent: str, reply: str, *, model: str | None = None, strea
         title += f"· {model} "
     rule = "─" * max(4, width - len(title) - 2)
     print(_paint(f"╭─{title}{rule}", "green", color, bold=True), file=stream)
-    for line in _wrap_reply(reply, width):
+    for line in _wrap_reply(_terminal_markdown(reply, color), width):
         print(_paint("│", "green", color) + (f" {line}" if line else ""), file=stream)
     print(_paint("╰" + "─" * (width - 1), "green", color), file=stream)
 

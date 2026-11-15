@@ -1,3 +1,4 @@
 [console_scripts]
 hub = hub.cli:main
+hub-telegram = hub.interfaces.telegram.bot:main
 repo-context = hub.agents.context.cli:main
