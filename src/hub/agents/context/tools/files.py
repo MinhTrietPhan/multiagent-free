@@ -3,6 +3,7 @@ import subprocess
 from fnmatch import fnmatch
 from pathlib import Path
 from ..config import CODE_EXT, CONFIG_EXT, CONFIG_NAMES, IGNORE_DIRS, MANIFESTS, SKIP_NAMES
+from ....project_files import is_ignored_path, iter_project_files
 
 def _git_files(root: Path) -> list[str] | None:
     try:
@@ -12,21 +13,26 @@ def _git_files(root: Path) -> list[str] | None:
         return None
 
 def _walk(root: Path) -> list[str]:
-    out = []
-    for p in root.rglob('*'):
-        if p.is_file():
-            out.append(p.relative_to(root).as_posix())
-    return out
+    limit = int(__import__('os').getenv('HUB_CONTEXT_MAX_FILES', '5000'))
+    return [p.relative_to(root).as_posix() for p in iter_project_files(root, max_files=limit)]
 
 def discover(root: str, exclude: list[str] | tuple=()) -> tuple[list[str], list[str]]:
     """Return (code_files, manifest_files) as sorted posix paths relative to root."""
     r = Path(root)
     code, manifests = ([], [])
+    max_files = max(1, int(__import__('os').getenv('HUB_CONTEXT_MAX_FILES', '5000')))
     for p in sorted(_git_files(r) or _walk(r)):
+        if len(code) + len(manifests) >= max_files:
+            break
         pp = Path(p)
-        if any((part in IGNORE_DIRS for part in pp.parts)):
+        if any((part in IGNORE_DIRS for part in pp.parts)) or is_ignored_path(p, r):
             continue
         if any((fnmatch(p, pat) for pat in exclude)):
+            continue
+        try:
+            if (r / p).stat().st_size > int(__import__('os').getenv('HUB_CONTEXT_MAX_FILE_BYTES', '2000000')):
+                continue
+        except OSError:
             continue
         if pp.suffix in CODE_EXT:
             code.append(p)
@@ -60,5 +66,3 @@ def render_tree(paths: list[str]) -> str:
                 walk(child, prefix + ('    ' if last else '│   '))
     walk(tree)
     return '\n'.join(lines)
-
-

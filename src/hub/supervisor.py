@@ -63,4 +63,3 @@ def make_supervisor(agents: list[AgentSpec], llm_factory=get_llm):
             return {"next": "orchestrator", "delegated": selected}
         return {"next": route.agent if route.agent in names else names[0], "delegated": []}
     return supervisor
-

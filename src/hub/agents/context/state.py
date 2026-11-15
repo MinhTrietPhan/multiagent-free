@@ -3,7 +3,7 @@ from typing import TypedDict
 
 
 class ModuleInfo(TypedDict):
-    kind: str            # "py" | "ipynb"
+    kind: str            # language key: py, ipynb, js, ts, java, go, rust, etc.
     skeleton: str        # signatures + first docstring line, with L<n> locations
     clean: str           # full code, comments/blank lines stripped, notebook outputs dropped
     imports: list[str]   # raw dotted module names
@@ -25,5 +25,3 @@ class State(TypedDict, total=False):
     ranking: list[str]                # ranker: most important first
     entry_points: list[str]           # ranker
     output: str                       # renderer
-
-

@@ -5,6 +5,7 @@ Mọi đường dẫn do model yêu cầu đều bị chặn nếu trỏ ra ngo�
 import ast
 import re
 from pathlib import Path
+from ...project_files import is_ignored_path
 
 DEFAULT_WINDOW = 500   # số dòng đọc mỗi lần khi không chỉ định khoảng
 MAX_CHARS = 60_000     # giới hạn mềm mỗi lần đọc; vượt thì báo dòng bắt đầu để đọc tiếp
@@ -19,7 +20,9 @@ def _safe_path(project_root: str, rel_path: str) -> Path | None:
     try:
         root = Path(project_root).resolve()
         fp = (root / rel_path).resolve()
-        fp.relative_to(root)
+        relative = fp.relative_to(root)
+        if is_ignored_path(relative, root):
+            return None
     except (ValueError, OSError):
         return None
     return fp if fp.is_file() else None
@@ -238,5 +241,3 @@ def find_project_root_from_context(context_text: str) -> str | None:
             if candidate.is_dir():
                 return str(candidate.resolve())
     return None
-
-

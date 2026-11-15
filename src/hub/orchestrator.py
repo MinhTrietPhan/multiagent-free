@@ -12,7 +12,7 @@ def make_orchestrator(agents):
             return {"messages": [AIMessage("Không đủ agent an toàn để chạy song song. Hãy chọn một agent cụ thể.", name="orchestrator")]}
         outputs = {}
         with ThreadPoolExecutor(max_workers=min(4, len(selected))) as pool:
-            futures = {pool.submit(a.node, dict(state)): a.name for a in selected}
+            futures = {pool.submit(a.node, {**state, "_parallel_execution": True}): a.name for a in selected}
             for future in as_completed(futures):
                 name = futures[future]
                 try:
@@ -24,4 +24,3 @@ def make_orchestrator(agents):
         body = "\n\n".join(f"### {name}\n{outputs[name]}" for name in sorted(outputs))
         return {"messages": [AIMessage(content=body, name="orchestrator")]}
     return orchestrator
-

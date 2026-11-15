@@ -48,3 +48,16 @@ def test_search_project_returns_matching_source_lines(tmp_path):
     result = search_project(str(tmp_path), "find ResNet class")
     assert "model.py:L1" in result and "class ResNet" in result
 
+
+def test_search_project_skips_venv_release_and_internal_bundle(tmp_path):
+    (tmp_path / "main.py").write_text("TARGET_SYMBOL = 1\n", encoding="utf-8")
+    for rel in (
+        ".venv-release/Lib/site-packages/noise.py",
+        "Transcripts_automation/_internal/pkg/noise.py",
+    ):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("TARGET_SYMBOL = 999\n", encoding="utf-8")
+    result = search_project(str(tmp_path), "TARGET_SYMBOL", max_results=20)
+    assert "main.py:L1" in result
+    assert ".venv-release" not in result and "_internal" not in result

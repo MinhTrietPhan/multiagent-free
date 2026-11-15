@@ -13,5 +13,3 @@ PIPELINE: list[tuple[str, AgentNode]] = [
     # ("summarizer", summarizer_node),   # future: optional LLM agent (langchain), cached by file hash
     ("renderer", renderer_node),
 ]
-
-

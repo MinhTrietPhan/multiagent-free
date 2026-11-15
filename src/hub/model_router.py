@@ -17,6 +17,18 @@ def is_retryable_error(error: Exception) -> bool:
     return any((pattern in message for pattern in patterns))
 
 
+
+def is_shared_input_quota_error(error: Exception) -> bool:
+    """Detect project/API-key input-token quota errors shared across Gemini models."""
+    message = str(error).lower()
+    return any(pattern in message for pattern in (
+        "generate_content_free_tier_input_token_count",
+        "generate_content_input_token_count",
+        "input_token_count_per_minute",
+        "input tokens per minute",
+    ))
+
+
 def _reason(error: Exception) -> str:
     message = str(error).lower()
     if any(k in message for k in ('429', 'resource_exhausted', 'rate_limit', 'quota')):
@@ -59,7 +71,8 @@ class UsageTracker:
     def failure(self, model: str, error: Exception):
         self.failures[model] = self.failures.get(model, 0) + 1
         self.cooldowns[model] = time.time() + COOLDOWN_SECONDS
-        self.turn_events.append(f'{model}: {_reason(error)} → chuyển model kế tiếp')
+        next_step = "dừng do quota input dùng chung" if is_shared_input_quota_error(error) else "chuyển model kế tiếp"
+        self.turn_events.append(f'{model}: {_reason(error)} → {next_step}')
 
     def next_model(self, pool: list[str]) -> str | None:
         return next((m for m in pool if not self.is_cooling(m)), None)
@@ -93,6 +106,12 @@ class ModelRouter:
                 logger.warning('Model %s failed: %s', model_name, error)
                 self.tracker.failure(model_name, error)
                 errors.append(error)
+                if is_shared_input_quota_error(error):
+                    raise RuntimeError(
+                        "Gemini đang chạm giới hạn input tokens/phút dùng chung cho API key. "
+                        "Agent Hub đã dừng failover để tránh gọi thử các model khác vô ích. "
+                        "Hãy giảm context đầu vào hoặc chờ quota được làm mới rồi thử lại."
+                    ) from error
         if errors:
             raise RuntimeError('Tất cả model trong MODEL_POOL đều không khả dụng.') from errors[-1]
         raise RuntimeError('Không còn model khả dụng trong MODEL_POOL.')
@@ -126,5 +145,3 @@ def get_model_router(agent: str | None = None):
 def get_llm(agent: str | None = None):
     """Return the shared ModelRouter, optionally using an agent-specific preferred model."""
     return get_model_router(agent)
-
-

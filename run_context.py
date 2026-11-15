@@ -26,5 +26,3 @@ def main():
     print(f'Dung lượng: {len(context):,} ký tự')
 if __name__ == '__main__':
     main()
-
-

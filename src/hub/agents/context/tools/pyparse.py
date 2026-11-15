@@ -63,5 +63,3 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
             imports += [f'{base}.{a.name}' if n.module else f'{base}{a.name}' for a in n.names]
     _walk_defs(tree.body, 0, loc, skel)
     return {'skeleton': skel, 'clean': source if keep_source else ast.unparse(tree), 'imports': imports, 'has_main': any((_is_main_guard(n) for n in tree.body))}
-
-

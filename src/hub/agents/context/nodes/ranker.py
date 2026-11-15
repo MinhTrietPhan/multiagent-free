@@ -24,8 +24,22 @@ def ranker_node(state: State) -> dict:
     edges: set[tuple[str, str]] = set()
     for f, info in parsed.items():
         for imp in info["imports"]:
-            name = imp.lstrip(".")
-            for cand in (name, name.rsplit(".", 1)[0] if "." in name else name):
+            candidates = []
+            if imp.startswith("."):
+                # Resolve JS/TS-style relative imports against the importing file.
+                base = (PurePosixPath(f).parent / imp).as_posix()
+                base_path = PurePosixPath(base)
+                if base_path.suffix:
+                    candidates.extend(_module_names(base))
+                else:
+                    for suffix in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte"):
+                        candidates.extend(_module_names(base + suffix))
+                    candidates.extend(_module_names(base + "/index.ts"))
+                    candidates.extend(_module_names(base + "/index.js"))
+            else:
+                name = imp.lstrip(".")
+                candidates.extend((name, name.rsplit(".", 1)[0] if "." in name else name))
+            for cand in candidates:
                 targets = index.get(cand, set())
                 if len(targets) == 1:  # ambiguous names are skipped to stay accurate
                     t = next(iter(targets))
@@ -52,5 +66,3 @@ def ranker_node(state: State) -> dict:
 
     ranking = sorted(parsed, key=lambda f: (-scores[f], f))
     return {"edges": sorted(edges), "ranking": ranking, "entry_points": sorted(entry_points)}
-
-

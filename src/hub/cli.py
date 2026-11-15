@@ -5,6 +5,10 @@ Lệnh:              /help  /agents  /models  /reset
 """
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
+import os
+import shutil
+import sys
+import textwrap
 from .config import MODEL_POOL
 from .graph import build_hub
 from .model_router import TRACKER
@@ -14,6 +18,101 @@ from .skills import SkillRegistry
 from .tools.builtin import register_builtin_tools
 from .tools.mcp import load_mcp_tools
 
+
+
+_ANSI = {
+    "reset": "\033[0m",
+    "bold": "\033[1m",
+    "cyan": "\033[96m",
+    "green": "\033[92m",
+    "yellow": "\033[93m",
+    "red": "\033[91m",
+    "dim": "\033[2m",
+    "blue": "\033[94m",
+}
+
+
+def _color_enabled(stream=None) -> bool:
+    """Enable ANSI only for interactive terminals; respect NO_COLOR/FORCE_COLOR."""
+    if os.getenv("NO_COLOR") is not None:
+        return False
+    if os.getenv("FORCE_COLOR"):
+        return True
+    stream = stream or sys.stdout
+    try:
+        return bool(stream.isatty())
+    except (AttributeError, OSError):
+        return False
+
+
+def _paint(text: str, color: str, enabled: bool = True, *, bold: bool = False) -> str:
+    if not enabled:
+        return text
+    prefix = (_ANSI["bold"] if bold else "") + _ANSI[color]
+    return f"{prefix}{text}{_ANSI['reset']}"
+
+
+def input_prompt(label: str = "Bạn") -> str:
+    """Distinct prompt so user input is visually separated from agent output."""
+    color = _color_enabled()
+    label_text = _paint(label.upper(), "cyan", color, bold=True)
+    arrow = _paint("❯", "cyan", color, bold=True)
+    return f"{label_text} {arrow} "
+
+
+def _wrap_reply(reply: str, width: int | None = None) -> list[str]:
+    """Wrap paragraphs while preserving blank lines, bullets and code indentation."""
+    width = width or shutil.get_terminal_size((100, 24)).columns
+    width = max(40, width - 4)  # reserve space for the left quote bar
+    output: list[str] = []
+    in_fence = False
+    for raw in str(reply).replace("\r\n", "\n").split("\n"):
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            output.append(raw)
+            continue
+        if not stripped:
+            output.append("")
+            continue
+        indent = raw[:len(raw) - len(raw.lstrip())]
+        if in_fence:
+            output.extend(textwrap.wrap(raw, width=width, subsequent_indent=indent + "    ",
+                                        replace_whitespace=False, drop_whitespace=False) or [raw])
+            continue
+        prefix = ""
+        content = raw.lstrip()
+        for marker in ("- ", "* ", "• "):
+            if content.startswith(marker):
+                prefix, content = marker, content[len(marker):]
+                break
+        numbered = __import__("re").match(r"(\d+[.)]\s+)(.*)", content)
+        if numbered:
+            prefix, content = numbered.group(1), numbered.group(2)
+        first_indent = indent + prefix
+        subsequent = indent + " " * len(prefix)
+        output.extend(textwrap.wrap(
+            content, width=max(20, width - len(first_indent)),
+            initial_indent=first_indent, subsequent_indent=subsequent,
+            break_long_words=False, break_on_hyphens=False,
+        ) or [raw])
+    return output
+
+
+def print_agent_reply(agent: str, reply: str, *, model: str | None = None, stream=None) -> None:
+    """Render a readable, boxed assistant response with a stable agent label."""
+    stream = stream or sys.stdout
+    color = _color_enabled(stream)
+    width = max(48, min(120, shutil.get_terminal_size((100, 24)).columns))
+    label = (agent or "hub").replace("_", "-").upper()
+    title = f" AGENT · {label} "
+    if model:
+        title += f"· {model} "
+    rule = "─" * max(4, width - len(title) - 2)
+    print(_paint(f"╭─{title}{rule}", "green", color, bold=True), file=stream)
+    for line in _wrap_reply(reply, width):
+        print(_paint("│", "green", color) + (f" {line}" if line else ""), file=stream)
+    print(_paint("╰" + "─" * (width - 1), "green", color), file=stream)
 
 def parse_route(text: str, names: list[str]) -> tuple[str | None, str]:
     """'/qa hàm nào train?' -> ('qa', 'hàm nào train?'). Không có prefix agent hợp lệ -> (None, text)."""
@@ -25,12 +124,19 @@ def parse_route(text: str, names: list[str]) -> tuple[str | None, str]:
     return (None, text)
 
 
+def _chat_input(_prompt: str = "") -> str:
+    if _prompt:
+        print(_paint(_prompt, "yellow", _color_enabled()))
+    return input(input_prompt("Lựa chọn" if _prompt else "Bạn"))
+
+
 def _turn(app, text: str, config: dict, ask, say, forced: str | None) -> tuple[str, str | None]:
     result = app.invoke({'messages': [HumanMessage(text)], 'forced': forced}, config)
     while '__interrupt__' in result:
         say(result['__interrupt__'][0].value)
-        result = app.invoke(Command(resume=ask('> ')), config)
-    return (result['messages'][-1].content, result.get('next'))
+        result = app.invoke(Command(resume=ask('')), config)
+    last = result['messages'][-1]
+    return (last.content, result.get('next') or getattr(last, 'name', None))
 
 
 def run_turn(app, text: str, config: dict, ask=input, say=print, forced: str | None=None) -> str:
@@ -57,10 +163,14 @@ def models_report() -> str:
 
 
 def _print_turn_notes():
+    color = _color_enabled()
     for ev in TRACKER.turn_events:
-        print(f'  ⚠ {ev}')
+        print(_paint(f"  ⚠ {ev}", "yellow", color))
     if TRACKER.route_models:
-        print(f"  ↳ điều phối bằng {' → '.join(TRACKER.route_models)} (gõ /qa hoặc /context để bỏ bước này)")
+        print(_paint(
+            f"  ↳ Điều phối: {' → '.join(TRACKER.route_models)} (gõ /qa hoặc /context để bỏ bước này)",
+            "dim", color,
+        ))
 
 
 def _restore_messages(store: MemoryStore, thread_id: str):
@@ -101,10 +211,11 @@ def main():
         thread_id = _new_thread_id(store)
     config = {"configurable": {"thread_id": thread_id}}
     restore_pending = True
-    print("Agent Hub. Gõ /help để xem lệnh, 'exit' để thoát.")
+    print("Agent Hub · /help để xem lệnh · exit để thoát")
+    print(_paint("─" * min(72, shutil.get_terminal_size((100, 24)).columns), "dim", _color_enabled()))
     while True:
         try:
-            text = input("bạn> ").strip()
+            text = input(input_prompt()).strip()
         except (EOFError, KeyboardInterrupt):
             break
         if not text:
@@ -183,26 +294,30 @@ def main():
                 history = _restore_messages(store, thread_id)
                 result = app.invoke({"messages": history + [HumanMessage(body)], "forced": forced}, config)
                 while "__interrupt__" in result:
-                    answer = input(str(result["__interrupt__"][0].value) + "\n> ")
+                    print(_paint("\nCẦN BẠN CHỌN", "yellow", _color_enabled(), bold=True))
+                    print(str(result["__interrupt__"][0].value))
+                    answer = input(input_prompt("Lựa chọn"))
                     result = app.invoke(Command(resume=answer), config)
-                reply, agent = result["messages"][-1].content, result.get("next")
+                last = result["messages"][-1]
+                reply, agent = last.content, result.get("next") or getattr(last, "name", None)
                 restore_pending = False
             else:
-                reply, agent = _turn(app, body, config, input, print, forced)
+                reply, agent = _turn(app, body, config, _chat_input, print, forced)
         except RuntimeError as e:
             _print_turn_notes()
-            print(f"hub> ⚠ {e}  (gõ /models để xem trạng thái)")
+            print(_paint(f"\nLỖI · {e}", "red", _color_enabled(), bold=True))
+            print(_paint("Gõ /models để xem trạng thái model.", "dim", _color_enabled()))
             continue
         except Exception as e:
             _print_turn_notes()
-            print(f"hub> Lỗi: {type(e).__name__}: {e}")
+            print(_paint(f"\nLỖI · {type(e).__name__}: {e}", "red", _color_enabled(), bold=True))
             continue
         _print_turn_notes()
-        label = " → ".join(TRACKER.turn_models) or forced or agent or "hub"
-        print(f"{label}> {reply}")
+        label = forced or agent or "hub"
+        model_label = " → ".join(TRACKER.turn_models) or None
+        print_agent_reply(label, reply, model=model_label)
         store.save_turn(thread_id, body, reply, agent or forced)
 
 
 if __name__ == "__main__":
     main()
-

@@ -7,4 +7,3 @@ app = build_hub()
 png_data = app.get_graph().draw_mermaid_png()
 Path("hub_graph.png").write_bytes(png_data)
 print("Saved graph to hub_graph.png")
-

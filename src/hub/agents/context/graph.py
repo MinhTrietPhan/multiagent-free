@@ -28,5 +28,3 @@ def build_context(root: str, mode: str = DEFAULT_MODE, budget: int | None = ...,
         {"root": root, "mode": mode, "budget": budget, "pin": list(pin), "exclude": list(exclude)}
     )
     return result["output"]
-
-

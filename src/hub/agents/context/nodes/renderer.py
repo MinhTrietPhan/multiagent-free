@@ -48,7 +48,7 @@ def _mermaid(edges: list[tuple[str, str]], limit: int=40) -> str:
         lines.append(f'  %% +{len(edges) - limit} more edges omitted')
     return '\n'.join(lines)
 
-LANG = {'.yaml': 'yaml', '.yml': 'yaml', '.json': 'json', '.toml': 'toml', '.ini': 'ini', '.cfg': 'ini', '.md': 'markdown'}
+LANG = {'.yaml': 'yaml', '.yml': 'yaml', '.json': 'json', '.toml': 'toml', '.ini': 'ini', '.cfg': 'ini', '.md': 'markdown', '.js': 'javascript', '.jsx': 'jsx', '.mjs': 'javascript', '.cjs': 'javascript', '.ts': 'typescript', '.tsx': 'tsx', '.vue': 'vue', '.svelte': 'svelte', '.java': 'java', '.kt': 'kotlin', '.kts': 'kotlin', '.scala': 'scala', '.go': 'go', '.rs': 'rust', '.c': 'c', '.h': 'c', '.cc': 'cpp', '.cpp': 'cpp', '.hpp': 'cpp', '.cs': 'csharp', '.php': 'php', '.rb': 'ruby', '.swift': 'swift', '.sh': 'bash', '.bash': 'bash', '.sql': 'sql'}
 
 def _config_section(root: Path, manifests: list[str], limit) -> list[str]:
     out = ['', '## 3. Config & docs']
@@ -89,7 +89,7 @@ def renderer_node(state: State) -> dict:
     for f in state['ranking']:
         info = parsed[f]
         if f in full:
-            lang = 'python'
+            lang = 'python' if Path(f).suffix == '.py' else ('json' if Path(f).suffix == '.ipynb' else LANG.get(Path(f).suffix, 'text'))
             parts += ['', f'### {f}  [FULL]', f'```{lang}', info['clean'], '```']
         else:
             body = info['skeleton'] or '# (no top-level definitions)'
@@ -109,5 +109,3 @@ def renderer_node(state: State) -> dict:
     out = '\n'.join(head) + '\n\n' + body + '\n'
     out = out.replace('\n\n## 1.', f'\n> ~{count_tokens(out):,} tokens\n\n## 1.', 1)
     return {'output': out}
-
-

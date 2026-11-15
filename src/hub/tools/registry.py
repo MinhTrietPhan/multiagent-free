@@ -37,4 +37,3 @@ _REGISTRY = ToolRegistry()
 
 def get_tool_registry() -> ToolRegistry:
     return _REGISTRY
-

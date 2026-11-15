@@ -1,5 +1,6 @@
 import argparse
 import sys
+from pathlib import Path
 from .config import DEFAULT_MODE, MODES, output_filename
 from .graph import build_context
 MENU = 'Chọn mức ngữ cảnh:\n  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n  2. balanced  Cân bằng (bản đồ + full code vài file chính)   [mặc định]\n  3. full      Đầy đủ (toàn bộ code, giữ comment, bỏ output notebook)'
@@ -20,14 +21,14 @@ def main(argv=None):
     a = ap.parse_args(argv)
     mode = a.mode or (_ask_mode() if sys.stdin.isatty() else DEFAULT_MODE)
     text = build_context(a.root, mode, budget=a.budget if a.budget is not None else ..., pin=a.pin, exclude=a.exclude)
-    out_path = a.output or output_filename(mode)
-    if out_path == '-':
+    if a.output == "-":
         print(text)
-    else:
-        with open(out_path, 'w', encoding='utf-8') as f:
-            f.write(text)
-        print(f'Wrote {out_path}', file=sys.stderr)
+        return
+
+    # Default output belongs to the target project, not the CLI's current directory.
+    out_path = Path(a.output).expanduser() if a.output else Path(a.root).expanduser().resolve() / output_filename(mode)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text, encoding="utf-8")
+    print(f"Wrote {out_path.resolve()}", file=sys.stderr)
 if __name__ == '__main__':
     main()
-
-

@@ -80,13 +80,19 @@ def test_read_function_not_found(tmp_path):
 # Integration test: QA node with mock LLM
 # ---------------------------------------------------------------------------
 
-def test_qa_node_no_context(tmp_path, monkeypatch):
-    """QA agent should say 'chưa có context' when no PROJECT_CONTEXT.md exists."""
+def test_qa_node_without_context_reads_project_source(tmp_path, monkeypatch):
+    """PROJECT_CONTEXT is optional; QA can still inspect source files."""
     monkeypatch.chdir(tmp_path)
-    state = {"messages": [HumanMessage("hàm nào xử lý GAF?")]}
-    result = qa_node(state)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
+    (tmp_path / "model.py").write_text("def train():\n    return 'trained'\n", encoding="utf-8")
+    mock_response = MagicMock(content="Hàm train nằm trong model.py.")
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = mock_response
+    with patch("hub.agents.qa.node.get_llm", return_value=mock_llm):
+        result = qa_node({"messages": [HumanMessage("hàm nào xử lý train?")]})
     msg = result["messages"][0].content
-    assert "Chưa có PROJECT_CONTEXT.md" in msg
+    assert "Hàm train" in msg
+    assert "Không có PROJECT_CONTEXT" in msg
 
 
 def test_qa_node_with_context_answers(tmp_path, monkeypatch):
@@ -149,5 +155,3 @@ def test_qa_spec_registered():
     names = [a.name for a in AGENTS]
     assert "qa" in names
     assert "context" in names
-
-

@@ -16,5 +16,3 @@ from typing import Callable
 from ..state import State
 
 AgentNode = Callable[[State], dict]
-
-

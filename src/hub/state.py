@@ -10,4 +10,4 @@ class HubState(TypedDict, total=False):
     next: str   # agent chosen by the supervisor
     forced: str | None  # agent do người dùng chọn thẳng
     delegated: list[str]
-
+    active_project_root: str  # selected project retained across turns in this thread

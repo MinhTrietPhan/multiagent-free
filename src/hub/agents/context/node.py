@@ -16,7 +16,7 @@ MENU = (
     "Bạn muốn mức ngữ cảnh nào?\n"
     "  1. map       Bản đồ nhanh (cây thư mục + skeleton)\n"
     "  2. balanced  Cân bằng (bản đồ + full code vài file chính)\n"
-    "  3. full      Đầy đủ (toàn bộ code, đã bỏ comment/output notebook)\n"
+    "  3. full      Đầy đủ (toàn bộ code, giữ comment, bỏ output notebook)\n"
     "Nhập 1/2/3 (mặc định 2):"
 )
 
@@ -41,13 +41,16 @@ def _last_user_text(state) -> str:
 
 
 def _find_dir(text: str) -> str | None:
-    for token in re.findall(r'[\w./~\\:-]+', text):
+    candidates = re.findall(r'["\']([^"\']+)["\']', text)
+    candidates += re.findall(r"[A-Za-z]:[\\/][^\s\"'`<>|]+", text)
+    candidates += re.findall(r"(?<![\w:])/(?:[^\s\"'`<>|]+)", text)
+    candidates += re.findall(r'[\w./~\\:-]+', text)
+
+    for token in candidates:
         cleaned = token.rstrip(",:;")
         path = Path(cleaned).expanduser()
-
         if cleaned and path.is_dir():
             return str(path.resolve())
-
     return None
 
 
@@ -133,12 +136,13 @@ def context_node(state) -> dict:
     msg = (
         "Đã tạo PROJECT_CONTEXT thành công.\n\n"
         f"- Dự án: `{project_root}`\n"
-        f"- Chế độ: `{mode}`\n"
+        f"- Chế độ: `{mode}` (mode={mode})\n"
         f"- File: `{out_file.name}`\n"
         f"- Đường dẫn đầy đủ: `{out_file}`\n"
         f"- Dung lượng nội dung: khoảng {count_tokens(out):,} tokens"
     )
 
     return {
-        "messages": [AIMessage(msg)]
+        "messages": [AIMessage(msg)],
+        "active_project_root": str(project_root),
     }

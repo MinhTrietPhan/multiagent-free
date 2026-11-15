@@ -6,5 +6,3 @@ from .agents.search import SPEC as search_spec
 from .agents.research import SPEC as research_spec
 
 AGENTS: list[AgentSpec] = [qa_spec, search_spec, context_spec, research_spec]
-
-

@@ -23,4 +23,3 @@ def build_hub(agents: list[AgentSpec] | None = None, llm_factory=get_llm, checkp
     routes["orchestrator"] = "orchestrator"
     g.add_conditional_edges("supervisor", lambda s: s["next"], routes)
     return g.compile(checkpointer=checkpointer or MemorySaver())
-

@@ -41,7 +41,7 @@ def test_newest_context_file_wins(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / 'PROJECT_CONTEXT.md').write_text('old'); time.sleep(0.05)
     (tmp_path / 'PROJECT_CONTEXT_full.md').write_text('new')
-    assert _load_context_with_path()[1].name == 'PROJECT_CONTEXT_full.md'
+    assert _load_context_with_path(tmp_path)[1].name == 'PROJECT_CONTEXT_full.md'
 
 def test_read_range_and_js_function(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path); mk(tmp_path)
@@ -89,8 +89,27 @@ def test_user_path_found(tmp_path, monkeypatch):
     sent = ' '.join(m.content for m in llm.invoke.call_args[0][0])
     assert str(f) not in sent.split('Câu hỏi:')[-1] and 'đã được nạp sẵn' in sent and str(f) in out['messages'][0].content
 
-def test_no_context(tmp_path, monkeypatch):
+def test_no_context_still_uses_source(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert 'Chưa có PROJECT_CONTEXT.md' in qa_node({'messages': [HumanMessage('x?')]})['messages'][0].content
+    (tmp_path / 'pyproject.toml').write_text("[project]\nname='sample'\n", encoding='utf-8')
+    (tmp_path / 'source.py').write_text('VALUE = 42\n', encoding='utf-8')
+    llm = llm_with('đã đọc source')
+    with patch('hub.agents.qa.node.get_llm', return_value=llm):
+        out = qa_node({'messages': [HumanMessage('giá trị VALUE là gì?')]})
+    assert out['messages'][0].content.startswith('đã đọc source')
+    assert 'Không có PROJECT_CONTEXT' in out['messages'][0].content
 
 
+def test_initial_context_omits_full_source_but_keeps_file_index():
+    from hub.agents.qa.node import _compact_project_context
+
+    context = (
+        "# Project context\n## 1. Overview\nimportant overview\n"
+        "### src/main.py  [FULL]\n```python\nSECRET_FULL_BODY = 123\n```\n"
+        "### src/model.py  [SKELETON]\n```text\ndef predict()  # L10\n```\n"
+    )
+    compact = _compact_project_context(context, max_chars=10000)
+    assert "important overview" in compact
+    assert "src/main.py" in compact and "src/model.py" in compact
+    assert "SECRET_FULL_BODY" not in compact
+    assert "retrieve this file" in compact
