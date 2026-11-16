@@ -1,6 +1,6 @@
 # Agent Hub
 
-Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và Gemini. Phiên bản này giữ lại Context, QA, Search, Supervisor, Orchestrator, memory, skills, tool registry và MCP bridge; bổ sung Research Agent dùng Laya.
+Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và Gemini. Giao diện gồm CLI và Telegram Bot. Dự án có Context, QA, Search, Research và Code Agent, cùng Supervisor, Orchestrator, memory, skills, tool registry và MCP bridge.
 
 | Agent | Chức năng | Model |
 |---|---|---|
@@ -8,13 +8,14 @@ Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và
 | `search` | Tìm kiếm read-only trong source dự án | Python |
 | `context` | Tạo/cập nhật Project Context | Python |
 | `research` | Search web, fetch, extract, deduplicate, verify và rank bài viết | Laya + Python; không gọi Gemini trong research loop |
+| `code` | Đọc, sửa và tạo source code trong dự án; xin phê duyệt trước khi ghi file; tự kiểm tra sau khi sửa | Gemini + Python (Python xử lý tối đa) |
 
 ## Architecture
 
 ```text
-CLI
+CLI / Telegram Bot
   -> Supervisor
-      -> QA / Search / Context / Research
+      -> QA / Search / Context / Research / Code
       -> Orchestrator (chỉ phối hợp các agent parallel-safe)
 
 Research Agent
@@ -23,23 +24,43 @@ Research Agent
   -> Python tools: Search / Fetch / Extract / Deduplicate / Verify
   -> Laya experimental scoring + deterministic ranking baseline
   -> Report
+
+Code Agent (LangGraph subgraph)
+  entry -> resolve project -> gather (+ explore) -> propose -> validate
+        -> approval (human) -> execute (apply + checks + review) -> report
+              ^---- repair loop ----|      ^---- next round / ask user ----|
 ```
 
-Research Agent là agent độc lập, `parallel_safe=False`. Laya là decision engine bên trong Research Agent, không phải agent ngang hàng. Research Agent không import ModelRouter và không gọi Gemini trong vòng lặp tìm kiếm/thu thập.
+Research Agent và Code Agent đều là agent độc lập, `parallel_safe=False`. Laya là decision engine bên trong Research Agent, không phải agent ngang hàng. Research Agent không import ModelRouter và không gọi Gemini trong vòng lặp tìm kiếm/thu thập.
 
 ## Install
 
-Yêu cầu Python 3.11+.
+Yêu cầu Python 3.11+ (khuyến nghị 3.12) và [Conda](https://docs.conda.io/en/latest/miniconda.html).
 
-```bash
-python -m venv .venv
-# Windows PowerShell: .venv\\Scripts\\Activate.ps1
-# macOS/Linux: source .venv/bin/activate
-pip install -e ".[research,dev]"
-cp .env.example .env
+```powershell
+conda create -n agent-hub python=3.12 -y
+conda activate agent-hub
+pip install -e ".[research,telegram,dev]"
+copy .env.example .env      # macOS/Linux: cp .env.example .env
 ```
 
-Điền `GOOGLE_API_KEY` nếu dùng QA/Supervisor. Research Agent không cần Gemini API key. Laya và các thư viện research được cài qua optional extra `research`.
+Các extra (cài thêm khi cần):
+
+| Extra | Dùng cho |
+|---|---|
+| `research` | Research Agent (Laya, ddgs, requests, trafilatura, beautifulsoup4) |
+| `telegram` | Telegram Bot (`python-telegram-bot`) |
+| `dev` | `pytest` |
+| `tokens` | Đếm token chính xác (`tiktoken`); mặc định ước lượng chars/4 |
+| `mcp` | MCP bridge (`langchain-mcp-adapters`) |
+
+Điền `GOOGLE_API_KEY` trong `.env` nếu dùng QA, Supervisor hoặc Code Agent. Research Agent không cần Gemini API key.
+
+Mỗi lần mở terminal mới, kích hoạt lại môi trường trước khi chạy:
+
+```powershell
+conda activate agent-hub
+```
 
 ## CLI
 
@@ -49,12 +70,134 @@ hub
 /qa Giải thích ModelRouter
 /search ModelRouter
 /context full cho .
+/code trong dự án "D:\path\to\project" thêm hàm ... vào src/utils.py
 /agents
 /models
 /help
 ```
 
-Các lệnh `/qa`, `/search`, `/context`, `/research` gọi agent trực tiếp và bỏ qua Supervisor routing. Câu hỏi không có prefix sẽ được Supervisor định tuyến.
+Các lệnh `/qa`, `/search`, `/context`, `/research`, `/code` gọi agent trực tiếp và bỏ qua Supervisor routing. Câu hỏi không có prefix sẽ được Supervisor định tuyến bằng một model nhỏ; Supervisor có thể không chọn `code` khi bạn muốn sửa code, vì vậy **hãy gọi `/code` trực tiếp**.
+
+Các lệnh khác trong CLI: `/skills`, `/tools`, `/tool <name> <JSON>`, `/history`, `/memory`, `/reset`, `exit`.
+
+Chạy độc lập Context Agent (không dùng LLM):
+
+```powershell
+repo-context <project-path>
+```
+
+## Telegram Bot
+
+Cài extra `telegram`, rồi cấu hình trong `.env` (không commit `.env`):
+
+```dotenv
+HUB_TELEGRAM_BOT_TOKEN=<token từ @BotFather>
+HUB_TELEGRAM_ALLOWED_USER_ID=<user id số của bạn>   # chỉ tài khoản này dùng được bot
+```
+
+```powershell
+conda activate agent-hub
+hub-telegram
+```
+
+Bot có `/start`, `/help`, `/agents`, `/reset` và một lệnh cho mỗi agent (`/qa`, `/search`, `/context`, `/research`, `/code`). Khi agent cần hỏi lại (chọn project, duyệt patch, câu hỏi của Code Agent), hãy **trả lời tin nhắn tiếp theo**; tin nhắn đó được dùng làm câu trả lời. Trạng thái chờ nằm trong bộ nhớ của tiến trình bot, nên restart bot sẽ mất yêu cầu đang chờ duyệt (không có file nào bị ghi trước khi bạn duyệt).
+
+## Code Agent
+
+Code Agent thao tác trực tiếp trên source code của một dự án theo yêu cầu bằng ngôn ngữ tự nhiên. Nguyên tắc: **Python xử lý tối đa, Gemini chỉ suy luận phần cần thiết.**
+
+| Python đảm nhiệm | Gemini đảm nhiệm |
+|---|---|
+| Xác định project root, duyệt thư mục, tìm file | Hiểu yêu cầu |
+| Đọc code, lọc file không liên quan, giới hạn context | Chọn file cần đọc thêm |
+| Kiểm tra đường dẫn, secret, file được phép sửa | Lập kế hoạch, đề xuất chỉnh sửa |
+| Áp dụng chỉnh sửa, sinh unified diff, backup, hoàn tác | Rà soát việc còn thiếu sau mỗi vòng |
+| Chạy kiểm tra theo allowlist, phát hiện lỗi từ output | Phân tích lỗi khi cần sửa lại |
+
+### Cách dùng
+
+```text
+/code trong dự án "D:\Do_An\MyProject" thêm một model CNN1D gồm 4 convolutional blocks, BatchNorm, ReLU, MaxPool. Giữ nguyên các model hiện tại.
+```
+
+1. Xác định project (đường dẫn trong yêu cầu, hoặc project đang chọn trong thread). Project phải nằm trong `HUB_WORKSPACE_ROOTS`.
+2. Khám phá: agent đọc `CONTRIBUTING.md`/`AGENTS.md`/`CLAUDE.md` nếu có, xem bản đồ các file Python và đọc thêm file liên quan (factory, config, data loader...).
+3. Đề xuất chỉnh sửa, Python kiểm tra và hiển thị kế hoạch, danh sách file, các lệnh sẽ chạy và diff.
+4. Bạn trả lời: `y` = áp dụng · `n` = huỷ · `diff [số file]` = xem diff đầy đủ. Mọi nội dung khác đều được coi là huỷ.
+5. Áp dụng patch (có backup), chạy kiểm tra, rồi rà soát: nếu còn việc cụ thể thì tự sang vòng sau (vẫn xin duyệt), nếu cần quyết định thì hỏi bạn đúng một câu (trả lời bằng chữ, hoặc gõ `dừng` để kết thúc).
+6. Báo cáo: file đã tạo/sửa, các vòng đã làm, kết quả kiểm tra, vấn đề còn lại, `git diff --stat` và đường dẫn backup.
+
+### Loại chỉnh sửa
+
+- `modify`: thay một đoạn có sẵn (đoạn neo phải duy nhất; nếu chỉ lệch thụt lề/khoảng trắng và vẫn duy nhất thì agent tự khớp lại).
+- `create`: tạo file mới (không ghi đè file có sẵn).
+- `append`: thêm vào cuối file; với file Python có `if __name__ == "__main__"`, code mới được chèn trước khối đó. Các `import` trùng với file được tự bỏ.
+- Không xoá file, không sửa notebook `.ipynb`, không cài package, không thao tác git ghi (commit/checkout/reset...).
+
+### Kiểm tra sau khi sửa
+
+Chỉ chạy công cụ mà dự án thực sự dùng, qua allowlist:
+
+- `python -m compileall` cho các file `.py` đã đổi.
+- `ruff check` nếu có `ruff.toml`, `.ruff.toml` hoặc `[tool.ruff]`.
+- `pytest -q -x` nếu dự án có `tests/`, `pytest.ini` hoặc `[tool.pytest]`; nếu không, chạy riêng các file test mà agent vừa viết.
+
+Lệnh được chạy bằng Python của dự án: `python_path` nếu đã đặt, nếu không thì `.venv`/`venv` trong dự án, nếu không có thì Python đang chạy hub. Nếu môi trường đó thiếu thư viện (ví dụ `torch`), agent báo "bỏ qua" kèm hướng dẫn, không coi đó là lỗi patch. Biến môi trường chứa `KEY`, `TOKEN`, `SECRET`, `PASSWORD` bị loại khỏi tiến trình kiểm tra.
+
+Nếu kiểm tra thất bại, agent phân tích output và đề xuất patch sửa lỗi (tối đa `max_repair_attempts` lần, không lặp vô hạn); mỗi patch sửa lỗi cũng cần duyệt.
+
+### Bảo mật
+
+- Không đọc hoặc ghi `.env`, credentials, khoá riêng và các file bí mật; nội dung các file này không bao giờ được gửi cho Gemini (`.env.example` được phép).
+- Không sửa `.git`, `.venv`, `node_modules`... và không đi ra ngoài project root (chặn `..`, đường dẫn tuyệt đối, symlink, tên thiết bị Windows).
+- Không tự sửa các file bảo vệ của chính Code Agent (`src/hub/agents/code/*`).
+- Chỉ chạy lệnh trong allowlist; Gemini không thực thi shell tuỳ ý.
+- Patch được kiểm tra hash trước khi áp dụng: file đổi giữa lúc đề xuất và áp dụng thì bị từ chối. Ghi file theo kiểu tất cả hoặc không gì (hoàn tác nếu lỗi), bản gốc được backup tại `<HUB_DATA_DIR>/code-agent/backups/<thời gian>/`.
+- Chế độ `auto` không bỏ qua bất kỳ giới hạn bảo mật nào ở trên.
+
+### Cấu hình
+
+Lưu tại `<HUB_DATA_DIR>/code-agent.json` (mặc định `~/.agent-hub/code-agent.json`). Xem và đổi ngay trong chat:
+
+```text
+/code config                         # xem cấu hình hiện tại
+/code config max_context_chars 60000
+/code config python_path C:\Users\you\miniconda3\envs\my-project\python.exe
+/code config reset
+```
+
+| Khoá | Mặc định | Ý nghĩa |
+|---|---|---|
+| `approval_mode` | `approve` | `approve`: xin duyệt trước khi sửa; `auto`: tự áp dụng trong phạm vi cho phép (chỉ bật bằng cách sửa tay file JSON) |
+| `model_strategy` | `hybrid` | `cheap`: luôn dùng model `code`; `hybrid`: model `code_strong` khi sửa lỗi, refactor/debug hoặc chạm từ 3 file; `strong`: luôn `code_strong` |
+| `max_rounds` | `3` (1–3) | Số vòng làm việc (sau mỗi patch, agent rà soát và có thể làm tiếp/hỏi bạn); `1` = chỉ một patch |
+| `explore_rounds` | `2` (0–3) | Số lượt "cần đọc thêm file nào" trước khi đề xuất; `0` = tắt |
+| `max_repair_attempts` | `2` (0–3) | Số lần sửa lại khi patch bị từ chối hoặc kiểm tra thất bại |
+| `max_tool_calls` | `40` | Giới hạn thao tác (đọc, tìm, gọi model, chạy lệnh) mỗi lần chạy |
+| `max_context_chars` | `24000` | Giới hạn context gửi cho Gemini |
+| `auto_run_tests` | `true` | Tự chạy kiểm tra sau khi áp dụng |
+| `command_timeout` | `300` | Giây tối đa cho mỗi lệnh kiểm tra |
+| `python_path` | rỗng | Python của môi trường chạy được dự án đích (ví dụ có `torch`) |
+
+Mỗi vòng thêm vài lần gọi Gemini; nếu hết quota nhanh, đặt `explore_rounds 0` và `max_rounds 1`.
+
+Chọn model: `/code` dùng `get_llm("code")` và `get_llm("code_strong")` của ModelRouter. Đặt `HUB_MODEL_CODE` và `HUB_MODEL_CODE_STRONG` trong `.env` để chọn model; nếu để trống, cả hai dùng pool `HUB_MODELS` nên `hybrid` chưa khác gì `cheap`. Chỉ dùng model có trong `HUB_MODELS`.
+
+### Mã nguồn
+
+```text
+src/hub/agents/code/
+├── spec.py        # đăng ký AgentSpec (name="code", parallel_safe=False)
+├── graph.py       # workflow LangGraph (subgraph, interrupt/resume)
+├── state.py       # trạng thái workflow
+├── settings.py    # đọc/ghi/validate cấu hình, lệnh /code config
+├── security.py    # chính sách đường dẫn, secret và allowlist lệnh
+├── tools.py       # context, patch, diff, backup, git (chỉ đọc), kiểm tra
+├── prompts.py     # prompt và schema cho Gemini
+└── report.py      # prompt duyệt, trang diff, báo cáo cuối
+```
+
+`approval` và `ask` là các node riêng, không gọi LLM: LangGraph chạy lại cả node bị gián đoạn khi resume, nên cách này đảm bảo patch bạn đã duyệt chính là patch được áp dụng.
 
 ## Research Agent (Laya)
 
@@ -96,33 +239,15 @@ Model card hiện công bố checkpoint base multilingual đạt 0.342 trên ben
 
 Tạo JSONL theo schema trong `benchmarks/README.md`, sau đó chạy:
 
-```bash
+```powershell
 python scripts/benchmark_laya_research.py benchmarks/my_labels.jsonl
 ```
 
 Chỉ chuyển `active` khi Laya vượt baseline trên tập held-out, có kết quả theo từng loại action và ranking được kiểm tra bằng nhãn người dùng.
 
-## Other components
+## QA / Search / Code: chọn project
 
-- **Supervisor:** chọn agent phù hợp; chỉ delegate nhiều agent `parallel_safe`.
-- **Orchestrator:** chạy các subagent độc lập song song và tổng hợp kết quả.
-- **ModelRouter:** preferred model theo agent và Gemini fallback pool.
-- **MemoryStore:** SQLite conversation history; user/project Markdown memory.
-- **SkillRegistry:** nạp `SKILL.md`.
-- **ToolRegistry:** shared tools; tool có side effect yêu cầu xác nhận.
-- **MCP:** tùy chọn, cấu hình bằng `HUB_MCP_SERVERS`.
-
-## Tests
-
-```bash
-pytest -q
-```
-
-Research tests không cần tải model Laya hoặc gọi Internet vì sử dụng mock search/fetch/model. MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.
-
-## QA / Search project selection
-
-- QA và Search chỉ tìm project bên trong `HUB_WORKSPACE_ROOTS`; không quét toàn bộ ổ đĩa.
+- QA, Search và Code chỉ tìm hoặc thao tác project bên trong `HUB_WORKSPACE_ROOTS`; không quét toàn bộ ổ đĩa.
 - Khai báo nhiều workspace bằng dấu `;`, ví dụ trong `.env`:
 
 ```dotenv
@@ -134,26 +259,21 @@ HUB_PROJECT_SCAN_DEPTH=4
 - Project đã chọn được giữ trong thread. QA đọc `PROJECT_CONTEXT*.md` trong thư mục gốc nếu có; nếu không có, QA vẫn đọc source code trực tiếp. Source code luôn được ưu tiên khi khác với context.
 - Context Agent và lệnh `repo-context <project-path>` lưu `PROJECT_CONTEXT_<mode>.md` ngay trong thư mục project. Không dùng `HUB_CONTEXT_FILE` làm context toàn cục.
 
-## PMT Studio integration
+## Other components
 
-Agent Hub có các tool gọi PMT Studio local API. Cài `api_server/` vào PMT Studio theo gói `PMT-Studio-API`, chạy API ở `127.0.0.1:8765`, sau đó thêm cùng một token vào `.env` Agent Hub:
+- **Supervisor:** chọn agent phù hợp; chỉ delegate nhiều agent `parallel_safe`. Có lối tắt cố định cho `context`, `search`, `research`; `code` nên gọi trực tiếp bằng `/code`.
+- **Orchestrator:** chạy các subagent độc lập song song và tổng hợp kết quả.
+- **ModelRouter:** preferred model theo agent và Gemini fallback pool.
+- **MemoryStore:** SQLite conversation history; user/project Markdown memory.
+- **SkillRegistry:** nạp `SKILL.md`.
+- **ToolRegistry:** shared tools; tool có side effect yêu cầu xác nhận.
+- **MCP:** tùy chọn, cấu hình bằng `HUB_MCP_SERVERS`.
 
-```env
-HUB_PMT_STUDIO_URL=http://127.0.0.1:8765
-HUB_PMT_STUDIO_TOKEN=TOKEN_DA_TAO_BEN_PMT
+## Tests
+
+```powershell
+conda activate agent-hub
+pytest -q
 ```
 
-Khởi động lại `hub`, dùng `/tools` để xem tool và `/tool` để gọi:
-
-```text
-/tool pmt_health {}
-/tool pmt_list_channels {}
-/tool pmt_list_projects {"channel_id":"channel-id"}
-/tool pmt_create_project {"title":"Video title","language":"vi","channel_id":"channel-id"}
-/tool pmt_start_build {"project_name":"video-title","channel_id":"channel-id","options":{"num_stories":3,"char_len":4500}}
-/tool pmt_job_status {"job_id":"JOB_ID"}
-```
-
-`pmt_create_project`, `pmt_start_build` và `pmt_cancel_job` yêu cầu xác nhận thủ công. Tool trả về `job_id`; gọi `pmt_job_status` để theo dõi. Khi job hoàn tất, trường `output` là đường dẫn video render.
-
-Các tool này được đăng ký trong ToolRegistry hiện tại. Chúng chưa được gắn vào một Video Agent tự động; bước tiếp theo là xây Video Agent để hiểu yêu cầu tự nhiên, hỏi thông tin còn thiếu và gọi đúng PMT tools theo từng giai đoạn.
+Test không cần tải model Laya, không gọi Internet và không gọi Gemini (dùng mock/fake); `tests/conftest.py` cô lập test khỏi `.env` thật của bạn (ví dụ `HUB_WORKSPACE_ROOTS`, `HUB_DATA_DIR`). MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.
