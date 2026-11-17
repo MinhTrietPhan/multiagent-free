@@ -1,13 +1,13 @@
 # Project context: agent-hub
 > Root: `D:\Trietdeptrai\agent-hub`
-> repo-context · mode=full · files=91 · full_code=91 · commit=4d9fdcc
+> repo-context · mode=full · files=91 · full_code=91 · commit=5f972f9
 > Reading guide: `[SKELETON]` = signatures + first docstring line only (`# L12` = line number; `c3:L5` = notebook cell 3, line 5). `[FULL]` = complete code, comments kept. `[CONFIG]` = config/doc file content. If you need the body of a skeleton file, ask the user for it by path.
-> ~92,110 tokens
+> ~94,812 tokens
 
 ## 1. Overview
 ### Stack
 - Declared dependencies: langchain-core, langchain-google-genai, langgraph, pydantic, python-dotenv
-- Third-party imports seen in code: bs4, ddgs, dotenv, langchain_core, langchain_google_genai, langchain_mcp_adapters, langgraph, laya, pydantic, pytest, requests, tiktoken, trafilatura
+- Third-party imports seen in code: bs4, ddgs, dotenv, langchain_core, langchain_google_genai, langchain_mcp_adapters, langgraph, laya, playwright, pydantic, pytest, requests, tiktoken, trafilatura
 
 ### Entry points
 - `run_context.py`
@@ -175,13 +175,13 @@ graph LR
   tests_test_qa_agent_py["tests/test_qa_agent.py"] --> src_hub_registry_py["src/hub/registry.py"]
   tests_test_qa_project_py["tests/test_qa_project.py"] --> src_hub_agents_qa_project_py["src/hub/agents/qa/project.py"]
   tests_test_qa_upgrade_py["tests/test_qa_upgrade.py"] --> src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"]
+  tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_collectors___init___py["src/hub/agents/research/collectors/__init__.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_collectors_fetch_py["src/hub/agents/research/collectors/fetch.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_controller_decision_engine_py["src/hub/agents/research/controller/decision_engine.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_controller_policy_py["src/hub/agents/research/controller/policy.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_processors_deduplicate_py["src/hub/agents/research/processors/deduplicate.py"]
-  tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_ranking_engine_py["src/hub/agents/research/ranking/engine.py"]
-  %% +5 more edges omitted
+  %% +6 more edges omitted
 ```
 
 ## 2. Files
@@ -3916,15 +3916,48 @@ def find_project_root_from_context(context_text: str) -> str | None:
 
 ```
 
+### src/hub/agents/research/collectors/__init__.py  [FULL]
+```python
+
+
+```
+
 ### src/hub/agents/research/collectors/fetch.py  [FULL]
 ```python
 from __future__ import annotations
-import ipaddress
-import socket
-from urllib.parse import urljoin, urlparse
 
-USER_AGENT = "AgentHubResearch/0.1 (+local research client)"
+import ipaddress
+import os
+import socket
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from urllib.parse import urljoin, urlparse
+from urllib.request import getproxies
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
 MAX_BYTES = 2_000_000
+RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+CHALLENGE_MARKERS = (
+    "captcha",
+    "verify you are human",
+    "checking your browser",
+    "enable javascript and cookies to continue",
+    "cloudflare ray id",
+    "attention required! | cloudflare",
+)
+
+
+class FetchError(RuntimeError):
+    """A fetch failure with a stable category and optional HTTP status."""
+
+    def __init__(self, message: str, *, category: str, status_code: int | None = None):
+        super().__init__(message)
+        self.category = category
+        self.status_code = status_code
 
 
 def validate_public_url(url: str) -> str:
@@ -3937,8 +3970,16 @@ def validate_public_url(url: str) -> str:
     if host in {"localhost", "localhost.localdomain"}:
         raise ValueError("Localhost URLs are blocked")
     try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))}
+        addresses = {
+            item[4][0]
+            for item in socket.getaddrinfo(
+                host, parsed.port or (443 if parsed.scheme == "https" else 80)
+            )
+        }
     except OSError as exc:
+        # With an explicit proxy, DNS may be resolved by the proxy itself.
+        if getproxies():
+            return url
         raise ValueError(f"Could not resolve host: {host}") from exc
     if not addresses:
         raise ValueError("Host did not resolve")
@@ -3949,62 +3990,224 @@ def validate_public_url(url: str) -> str:
     return url
 
 
-def fetch_html(url: str, timeout: int = 12, max_redirects: int = 3) -> tuple[str, str]:
+def _retry_delay(response, attempt: int) -> float:
+    value = response.headers.get("Retry-After")
+    if value:
+        try:
+            return max(0.0, min(float(value), 15.0))
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(value)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                return max(0.0, min((retry_at - datetime.now(timezone.utc)).total_seconds(), 15.0))
+            except (TypeError, ValueError, OverflowError):
+                pass
+    return min(0.75 * (2**attempt), 3.0)
+
+
+def fetch_html(
+    url: str,
+    timeout: int = 12,
+    max_redirects: int = 3,
+    max_attempts: int = 2,
+) -> tuple[str, str]:
     try:
         import requests
     except ImportError as exc:
         raise RuntimeError("Thiếu requests. Cài bằng: pip install -e '.[research]'") from exc
+
     current = url
-    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9"}
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5",
+        "Accept-Language": "en-US,en;q=0.8,vi;q=0.6",
+    }
     with requests.Session() as session:
         for _ in range(max_redirects + 1):
             validate_public_url(current)
-            response = session.get(current, headers=headers, timeout=timeout, stream=True,
-                                   allow_redirects=False)
+            response = None
+            for attempt in range(max(1, max_attempts)):
+                try:
+                    response = session.get(
+                        current,
+                        headers=headers,
+                        timeout=timeout,
+                        stream=True,
+                        allow_redirects=False,
+                    )
+                except requests.RequestException as exc:
+                    if attempt + 1 >= max_attempts:
+                        raise FetchError(
+                            f"Network request failed: {exc}", category="network_error"
+                        ) from exc
+                    time.sleep(min(0.75 * (2**attempt), 3.0))
+                    continue
+
+                if response.status_code in RETRYABLE_STATUS_CODES:
+                    status = response.status_code
+                    delay = _retry_delay(response, attempt)
+                    response.close()
+                    if attempt + 1 < max_attempts:
+                        time.sleep(delay)
+                        continue
+                    category = "rate_limited" if status == 429 else "temporary_http_error"
+                    raise FetchError(
+                        f"HTTP {status} after {max_attempts} attempts",
+                        category=category,
+                        status_code=status,
+                    )
+                if response.status_code in {401, 403}:
+                    status = response.status_code
+                    response.close()
+                    raise FetchError(
+                        f"HTTP {status}: access denied; will not bypass site restrictions",
+                        category="access_denied",
+                        status_code=status,
+                    )
+                if response.status_code == 404 or response.status_code == 410:
+                    status = response.status_code
+                    response.close()
+                    raise FetchError(
+                        f"HTTP {status}: page not found or removed",
+                        category="not_found",
+                        status_code=status,
+                    )
+                try:
+                    response.raise_for_status()
+                except requests.HTTPError as exc:
+                    status = response.status_code
+                    response.close()
+                    raise FetchError(
+                        f"HTTP {status}: {exc}", category="http_error", status_code=status
+                    ) from exc
+                break
+
+            if response is None:
+                raise FetchError("No HTTP response received", category="network_error")
+
             if response.is_redirect or response.is_permanent_redirect:
                 location = response.headers.get("Location")
                 response.close()
                 if not location:
-                    raise ValueError("Redirect without Location header")
+                    raise FetchError("Redirect without Location header", category="redirect_error")
                 current = urljoin(current, location)
                 continue
-            response.raise_for_status()
+
             content_type = response.headers.get("Content-Type", "").lower()
-            if content_type and not any(x in content_type for x in ("text/html", "application/xhtml", "text/plain")):
+            if content_type and not any(
+                item in content_type
+                for item in ("text/html", "application/xhtml", "text/plain")
+            ):
                 response.close()
-                raise ValueError(f"Unsupported content type: {content_type}")
+                raise FetchError(
+                    f"Unsupported content type: {content_type}", category="unsupported_content"
+                )
+
             chunks, size = [], 0
-            for chunk in response.iter_content(65536):
-                size += len(chunk)
-                if size > MAX_BYTES:
-                    response.close()
-                    raise ValueError("Page exceeds 2 MB limit")
-                chunks.append(chunk)
-            response.close()
-            encoding = response.encoding or "utf-8"
-            return b"".join(chunks).decode(encoding, errors="replace"), current
-    raise ValueError("Too many redirects")
+            try:
+                for chunk in response.iter_content(65536):
+                    size += len(chunk)
+                    if size > MAX_BYTES:
+                        raise FetchError("Page exceeds 2 MB limit", category="size_limit")
+                    chunks.append(chunk)
+                encoding = response.encoding or "utf-8"
+                return b"".join(chunks).decode(encoding, errors="replace"), current
+            finally:
+                response.close()
+
+    raise FetchError("Too many redirects", category="redirect_error")
 
 
 def extract_text(html: str) -> str:
+    lowered = html.lower()
+    if any(marker in lowered for marker in CHALLENGE_MARKERS):
+        raise FetchError(
+            "Access challenge detected (CAPTCHA/anti-bot page); skipping this source",
+            category="access_challenge",
+        )
     try:
         import trafilatura
-        text = trafilatura.extract(html, include_comments=False, include_tables=False,
-                                   favor_precision=True)
+
+        text = trafilatura.extract(
+            html, include_comments=False, include_tables=False, favor_precision=True
+        )
         if text:
             return text.strip()
     except ImportError:
         pass
     from bs4 import BeautifulSoup
+
     soup = BeautifulSoup(html, "html.parser")
     for node in soup(["script", "style", "nav", "footer", "header", "aside"]):
         node.decompose()
     return "\n".join(s.strip() for s in soup.get_text("\n").splitlines() if s.strip())
 
 
+def _fetch_with_browser(url: str, timeout: int = 15) -> tuple[str, str]:
+    """Render a public JS page; this is not a CAPTCHA or access-control bypass."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError(
+            "Playwright is not installed. Install with: pip install -e '.[research-browser]' "
+            "and run: playwright install chromium"
+        ) from exc
+
+    validate_public_url(url)
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(user_agent=USER_AGENT, locale="en-US")
+
+            def guard_route(route):
+                try:
+                    validate_public_url(route.request.url)
+                except (ValueError, OSError):
+                    route.abort()
+                    return
+                route.continue_()
+
+            page.route("**/*", guard_route)
+            response = page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
+            if response and response.status in {401, 403, 429}:
+                raise FetchError(
+                    f"Browser received HTTP {response.status}; access restriction respected",
+                    category="access_denied" if response.status in {401, 403} else "rate_limited",
+                    status_code=response.status,
+                )
+            page.wait_for_timeout(1200)
+            html = page.content()
+            if len(html.encode("utf-8", errors="ignore")) > MAX_BYTES:
+                raise FetchError("Rendered page exceeds 2 MB limit", category="size_limit")
+            text = extract_text(html)
+            if len(text) < 200:
+                raise FetchError("Browser rendered page still has insufficient text", category="thin_content")
+            return text, page.url
+        finally:
+            browser.close()
+
+
 def fetch_article(url: str) -> tuple[str, str]:
     html, final_url = fetch_html(url)
-    return extract_text(html), final_url
+    text = extract_text(html)
+    if len(text) >= 200 or os.getenv("HUB_RESEARCH_BROWSER_FALLBACK", "true").lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        return text, final_url
+
+    # Use a real browser only for a successful but JS-rendered/thin page.
+    # If Playwright is unavailable or rendering fails, preserve the HTTP result
+    # so the pipeline can still use the search snippet.
+    try:
+        browser_text, browser_url = _fetch_with_browser(final_url)
+        return browser_text, browser_url
+    except FetchError as exc:
+        if exc.category in {"access_denied", "rate_limited", "access_challenge"}:
+            raise
+        return text, final_url
+    except Exception:
+        return text, final_url
 
 ```
 
@@ -4012,7 +4215,6 @@ def fetch_article(url: str) -> tuple[str, str]:
 ```python
 from __future__ import annotations
 import os
-from datetime import datetime
 from urllib.parse import urlparse
 
 from ..collectors.search import WebSearchClient
@@ -4043,21 +4245,22 @@ class ResearchPipeline:
         self.max_pages = int(os.getenv("HUB_RESEARCH_MAX_PAGES", "12"))
 
     def _search(self, state: ResearchState):
-        today = datetime.now().astimezone().date().isoformat()
-        if state.search_rounds == 0:
-            query = f'{state.query} {today}'
-        elif state.search_rounds == 1:
-            query = f'{state.query} latest news developments'
-        else:
-            query = f'{state.query} analysis official announcement'
-        rows = self.searcher.search(query)
+        suffixes = ["", " latest", " analysis official announcement"]
+        query = f"{state.query}{suffixes[min(state.search_rounds, len(suffixes) - 1)]}"
         state.search_rounds += 1
+        try:
+            rows = self.searcher.search(query)
+        except Exception as exc:
+            state.warnings.append(f"Search failed: {type(exc).__name__}: {exc}")
+            state.actions.append(f"SEARCH: failed for round {state.search_rounds}")
+            return
         state.search_evidence.extend(rows)
         merged = deduplicate(state.all_search_results + rows)
         state.all_search_results = merged
         fetched = {a.url for a in state.articles}
         queued = {r["url"] for r in state.pending_urls}
-        state.pending_urls.extend(r for r in merged if r["url"] not in fetched and r["url"] not in queued)
+        state.pending_urls.extend(r for r in merged
+                                  if r["url"] not in fetched and r["url"] not in queued)
         state.actions.append(f"SEARCH: {len(rows)} results for round {state.search_rounds}")
 
     def _fetch_next(self, state: ResearchState):
@@ -4076,7 +4279,15 @@ class ResearchPipeline:
             article.source = (urlparse(final_url).hostname or domain).removeprefix("www.")
         except Exception as exc:
             article.fetch_error = f"{type(exc).__name__}: {exc}"
-            state.warnings.append(f"Fetch failed for {url}: {type(exc).__name__}")
+            detail = str(exc).replace("\n", " ")[:240]
+            category = getattr(exc, "category", type(exc).__name__)
+            status = getattr(exc, "status_code", None)
+            status_text = f" HTTP {status}" if status else ""
+            state.warnings.append(f"Fetch {category}{status_text} for {url}: {detail}")
+        # Trang render bằng JS (vd. MSN) chỉ trả vài ký tự: dùng snippet của search thay thế.
+        if len(article.content.strip()) < 200 and article.snippet:
+            article.content = article.snippet
+            article.fetch_error = article.fetch_error or "Thin content, used search snippet"
         corroborating = set()
         for candidate in state.search_evidence:
             if candidate.get("url") != url and _same_story(article.title, candidate.get("title", "")):
@@ -4156,7 +4367,8 @@ class ResearchPipeline:
 def run_research(query: str) -> str:
     pipeline = ResearchPipeline()
     state, ranked = pipeline.run(query)
-    return format_report(state, ranked, pipeline.mode)
+    readable = [a for a in ranked if a.content]
+    return format_report(state, readable or ranked, pipeline.mode)
 
 ```
 
@@ -5523,15 +5735,10 @@ __all__ = ["SPEC", "research_node"]
 
 ```
 
-### src/hub/agents/research/collectors/__init__.py  [FULL]
-```python
-
-
-```
-
 ### src/hub/agents/research/collectors/search.py  [FULL]
 ```python
 from __future__ import annotations
+import os
 
 
 class WebSearchClient:
@@ -5541,12 +5748,22 @@ class WebSearchClient:
     def search(self, query: str) -> list[dict]:
         try:
             from ddgs import DDGS
+            from ddgs.exceptions import DDGSException
         except ImportError as exc:
             raise RuntimeError("Thiếu ddgs. Cài bằng: pip install -e '.[research]'") from exc
+        region = os.getenv("HUB_RESEARCH_REGION", "wt-wt")
+        rows: list[dict] = []
         with DDGS() as client:
-            rows = client.text(query, max_results=self.max_results)
+            for kind in ("news", "text"):
+                if len(rows) >= 5:
+                    break
+                try:
+                    rows += list(getattr(client, kind)(query, region=region,
+                                                       max_results=self.max_results) or [])
+                except DDGSException:
+                    continue
         results = []
-        for row in rows or []:
+        for row in rows:
             url = row.get("href") or row.get("url")
             if not url:
                 continue
@@ -5557,7 +5774,6 @@ class WebSearchClient:
                 "published_at": row.get("date") or row.get("published") or None,
             })
         return results
-
 ```
 
 ### src/hub/agents/research/controller/__init__.py  [FULL]
@@ -5655,18 +5871,22 @@ def format_report(state: ResearchState, articles: list[Article], mode: str) -> s
             f"- URL: {article.url}",
             f"- Cross-source matches: {len(set(article.corroborating_sources))}",
         ]
+        if article.fetch_error:
+            lines.append(f"- Fetch status: {article.fetch_error[:220]}")
         excerpt = (article.content or article.snippet).replace("\n", " ").strip()[:450]
         if excerpt:
             lines.append(f"- Summary extract: {excerpt}")
         lines.append("")
     lines += ["### Research notes",
               "- Điểm xếp hạng là heuristic + Laya (nếu active), không phải thước đo độ viral.",
-              "- Ngày đăng có thể thiếu nếu website không cung cấp metadata."]
+              "- Ngày đăng có thể thiếu nếu website không cung cấp metadata.",
+              "- Trang chặn truy cập/CAPTCHA không được bypass; agent sẽ dùng snippet hoặc nguồn khác."]
     if state.warnings:
         lines += ["", "### Warnings"] + [f"- {warning}" for warning in state.warnings[:8]]
     if state.actions:
         lines += ["", "### Decision log"] + [f"- {action}" for action in state.actions[-8:]]
     return "\n".join(lines)
+
 
 ```
 
@@ -7673,6 +7893,126 @@ def test_pipeline_runs_without_laya_or_gemini(monkeypatch):
     assert all(item.final_score >= 0 for item in ranked)
     assert any("bbc.com" in item.corroborating_sources for item in ranked)
 
+
+
+def test_fetch_retries_rate_limit_then_succeeds(monkeypatch):
+    from hub.agents.research.collectors import fetch as fetch_module
+
+    class FakeResponse:
+        def __init__(self, status_code, body=b"ok"):
+            self.status_code = status_code
+            self.headers = {"Content-Type": "text/html", "Retry-After": "0"}
+            self.encoding = "utf-8"
+            self.is_redirect = False
+            self.is_permanent_redirect = False
+            self.body = body
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+        def iter_content(self, _chunk_size):
+            yield self.body
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                import requests
+                raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    class FakeSession:
+        def __init__(self):
+            self.responses = [FakeResponse(429), FakeResponse(200, b"<html>ok</html>")]
+            self.calls = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get(self, *_args, **_kwargs):
+            self.calls += 1
+            return self.responses.pop(0)
+
+    session = FakeSession()
+    monkeypatch.setattr(fetch_module, "validate_public_url", lambda url: url)
+    monkeypatch.setattr(fetch_module.time, "sleep", lambda _seconds: None)
+    import requests
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    html, final_url = fetch_module.fetch_html("https://example.com")
+    assert html == "<html>ok</html>"
+    assert final_url == "https://example.com"
+    assert session.calls == 2
+
+
+def test_fetch_does_not_retry_or_bypass_forbidden_status(monkeypatch):
+    from hub.agents.research.collectors import fetch as fetch_module
+
+    class FakeResponse:
+        status_code = 403
+        headers = {}
+        is_redirect = False
+        is_permanent_redirect = False
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeSession:
+        calls = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get(self, *_args, **_kwargs):
+            self.calls += 1
+            return FakeResponse()
+
+    session = FakeSession()
+    monkeypatch.setattr(fetch_module, "validate_public_url", lambda url: url)
+    import requests
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    from hub.agents.research.collectors.fetch import FetchError
+    try:
+        fetch_module.fetch_html("https://example.com")
+    except FetchError as exc:
+        assert exc.category == "access_denied"
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("403 must be reported as an access restriction")
+    assert session.calls == 1
+
+
+def test_fetch_article_uses_browser_for_thin_js_page(monkeypatch):
+    from hub.agents.research.collectors import fetch as fetch_module
+
+    monkeypatch.setattr(fetch_module, "fetch_html", lambda _url: ("<html>shell</html>", "https://example.com"))
+    monkeypatch.setattr(fetch_module, "extract_text", lambda _html: "thin")
+    monkeypatch.setattr(
+        fetch_module, "_fetch_with_browser", lambda _url: ("rendered article " * 30, "https://example.com/article")
+    )
+    monkeypatch.setenv("HUB_RESEARCH_BROWSER_FALLBACK", "true")
+
+    text, final_url = fetch_module.fetch_article("https://example.com")
+    assert len(text) >= 200
+    assert final_url.endswith("/article")
+
+
+def test_extract_text_rejects_captcha_or_cloudflare_challenge():
+    from hub.agents.research.collectors.fetch import FetchError, extract_text
+
+    try:
+        extract_text("<html><body>Checking your browser before accessing</body></html>")
+    except FetchError as exc:
+        assert exc.category == "access_challenge"
+    else:
+        raise AssertionError("anti-bot challenge pages must not be treated as article text")
+
 ```
 
 ### tests/test_telegram_interface.py  [FULL]
@@ -7768,6 +8108,8 @@ HUB_RESEARCH_LAYA_MODE=shadow
 HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
 HUB_RESEARCH_MAX_PAGES=12
 HUB_RESEARCH_RESULTS_PER_QUERY=12
+# Optional: render JS-heavy pages with Playwright when HTTP HTML is too thin
+HUB_RESEARCH_BROWSER_FALLBACK=true
 
 # Telegram interface (keep the bot token private; do not commit .env)
 HUB_TELEGRAM_BOT_TOKEN=
@@ -8089,6 +8431,7 @@ tokens = ["tiktoken"]   # exact token counts; otherwise chars/4 estimate
 dev = ["pytest"]
 mcp = ["langchain-mcp-adapters"]
 research = ["laya>=0.3.20", "ddgs>=9.0", "requests>=2.31", "trafilatura>=2.0", "beautifulsoup4>=4.12"]
+research-browser = ["playwright>=1.45"]  # Optional JS-rendered page fallback
 telegram = ["python-telegram-bot>=21,<23"]
 
 [project.scripts]

@@ -119,3 +119,123 @@ def test_pipeline_runs_without_laya_or_gemini(monkeypatch):
     assert searcher.calls == 1
     assert all(item.final_score >= 0 for item in ranked)
     assert any("bbc.com" in item.corroborating_sources for item in ranked)
+
+
+
+def test_fetch_retries_rate_limit_then_succeeds(monkeypatch):
+    from hub.agents.research.collectors import fetch as fetch_module
+
+    class FakeResponse:
+        def __init__(self, status_code, body=b"ok"):
+            self.status_code = status_code
+            self.headers = {"Content-Type": "text/html", "Retry-After": "0"}
+            self.encoding = "utf-8"
+            self.is_redirect = False
+            self.is_permanent_redirect = False
+            self.body = body
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+        def iter_content(self, _chunk_size):
+            yield self.body
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                import requests
+                raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    class FakeSession:
+        def __init__(self):
+            self.responses = [FakeResponse(429), FakeResponse(200, b"<html>ok</html>")]
+            self.calls = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get(self, *_args, **_kwargs):
+            self.calls += 1
+            return self.responses.pop(0)
+
+    session = FakeSession()
+    monkeypatch.setattr(fetch_module, "validate_public_url", lambda url: url)
+    monkeypatch.setattr(fetch_module.time, "sleep", lambda _seconds: None)
+    import requests
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    html, final_url = fetch_module.fetch_html("https://example.com")
+    assert html == "<html>ok</html>"
+    assert final_url == "https://example.com"
+    assert session.calls == 2
+
+
+def test_fetch_does_not_retry_or_bypass_forbidden_status(monkeypatch):
+    from hub.agents.research.collectors import fetch as fetch_module
+
+    class FakeResponse:
+        status_code = 403
+        headers = {}
+        is_redirect = False
+        is_permanent_redirect = False
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeSession:
+        calls = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get(self, *_args, **_kwargs):
+            self.calls += 1
+            return FakeResponse()
+
+    session = FakeSession()
+    monkeypatch.setattr(fetch_module, "validate_public_url", lambda url: url)
+    import requests
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    from hub.agents.research.collectors.fetch import FetchError
+    try:
+        fetch_module.fetch_html("https://example.com")
+    except FetchError as exc:
+        assert exc.category == "access_denied"
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("403 must be reported as an access restriction")
+    assert session.calls == 1
+
+
+def test_fetch_article_uses_browser_for_thin_js_page(monkeypatch):
+    from hub.agents.research.collectors import fetch as fetch_module
+
+    monkeypatch.setattr(fetch_module, "fetch_html", lambda _url: ("<html>shell</html>", "https://example.com"))
+    monkeypatch.setattr(fetch_module, "extract_text", lambda _html: "thin")
+    monkeypatch.setattr(
+        fetch_module, "_fetch_with_browser", lambda _url: ("rendered article " * 30, "https://example.com/article")
+    )
+    monkeypatch.setenv("HUB_RESEARCH_BROWSER_FALLBACK", "true")
+
+    text, final_url = fetch_module.fetch_article("https://example.com")
+    assert len(text) >= 200
+    assert final_url.endswith("/article")
+
+
+def test_extract_text_rejects_captcha_or_cloudflare_challenge():
+    from hub.agents.research.collectors.fetch import FetchError, extract_text
+
+    try:
+        extract_text("<html><body>Checking your browser before accessing</body></html>")
+    except FetchError as exc:
+        assert exc.category == "access_challenge"
+    else:
+        raise AssertionError("anti-bot challenge pages must not be treated as article text")

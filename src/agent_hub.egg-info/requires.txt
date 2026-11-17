@@ -17,6 +17,9 @@ requests>=2.31
 trafilatura>=2.0
 beautifulsoup4>=4.12
 
+[research-browser]
+playwright>=1.45
+
 [telegram]
 python-telegram-bot<23,>=21
 

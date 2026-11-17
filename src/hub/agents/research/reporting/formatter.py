@@ -15,15 +15,19 @@ def format_report(state: ResearchState, articles: list[Article], mode: str) -> s
             f"- URL: {article.url}",
             f"- Cross-source matches: {len(set(article.corroborating_sources))}",
         ]
+        if article.fetch_error:
+            lines.append(f"- Fetch status: {article.fetch_error[:220]}")
         excerpt = (article.content or article.snippet).replace("\n", " ").strip()[:450]
         if excerpt:
             lines.append(f"- Summary extract: {excerpt}")
         lines.append("")
     lines += ["### Research notes",
               "- Điểm xếp hạng là heuristic + Laya (nếu active), không phải thước đo độ viral.",
-              "- Ngày đăng có thể thiếu nếu website không cung cấp metadata."]
+              "- Ngày đăng có thể thiếu nếu website không cung cấp metadata.",
+              "- Trang chặn truy cập/CAPTCHA không được bypass; agent sẽ dùng snippet hoặc nguồn khác."]
     if state.warnings:
         lines += ["", "### Warnings"] + [f"- {warning}" for warning in state.warnings[:8]]
     if state.actions:
         lines += ["", "### Decision log"] + [f"- {action}" for action in state.actions[-8:]]
     return "\n".join(lines)
+

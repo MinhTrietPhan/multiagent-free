@@ -1,6 +1,5 @@
 from __future__ import annotations
 import os
-from datetime import datetime
 from urllib.parse import urlparse
 
 from ..collectors.search import WebSearchClient
@@ -31,21 +30,22 @@ class ResearchPipeline:
         self.max_pages = int(os.getenv("HUB_RESEARCH_MAX_PAGES", "12"))
 
     def _search(self, state: ResearchState):
-        today = datetime.now().astimezone().date().isoformat()
-        if state.search_rounds == 0:
-            query = f'{state.query} {today}'
-        elif state.search_rounds == 1:
-            query = f'{state.query} latest news developments'
-        else:
-            query = f'{state.query} analysis official announcement'
-        rows = self.searcher.search(query)
+        suffixes = ["", " latest", " analysis official announcement"]
+        query = f"{state.query}{suffixes[min(state.search_rounds, len(suffixes) - 1)]}"
         state.search_rounds += 1
+        try:
+            rows = self.searcher.search(query)
+        except Exception as exc:
+            state.warnings.append(f"Search failed: {type(exc).__name__}: {exc}")
+            state.actions.append(f"SEARCH: failed for round {state.search_rounds}")
+            return
         state.search_evidence.extend(rows)
         merged = deduplicate(state.all_search_results + rows)
         state.all_search_results = merged
         fetched = {a.url for a in state.articles}
         queued = {r["url"] for r in state.pending_urls}
-        state.pending_urls.extend(r for r in merged if r["url"] not in fetched and r["url"] not in queued)
+        state.pending_urls.extend(r for r in merged
+                                  if r["url"] not in fetched and r["url"] not in queued)
         state.actions.append(f"SEARCH: {len(rows)} results for round {state.search_rounds}")
 
     def _fetch_next(self, state: ResearchState):
@@ -64,7 +64,15 @@ class ResearchPipeline:
             article.source = (urlparse(final_url).hostname or domain).removeprefix("www.")
         except Exception as exc:
             article.fetch_error = f"{type(exc).__name__}: {exc}"
-            state.warnings.append(f"Fetch failed for {url}: {type(exc).__name__}")
+            detail = str(exc).replace("\n", " ")[:240]
+            category = getattr(exc, "category", type(exc).__name__)
+            status = getattr(exc, "status_code", None)
+            status_text = f" HTTP {status}" if status else ""
+            state.warnings.append(f"Fetch {category}{status_text} for {url}: {detail}")
+        # Trang render bằng JS (vd. MSN) chỉ trả vài ký tự: dùng snippet của search thay thế.
+        if len(article.content.strip()) < 200 and article.snippet:
+            article.content = article.snippet
+            article.fetch_error = article.fetch_error or "Thin content, used search snippet"
         corroborating = set()
         for candidate in state.search_evidence:
             if candidate.get("url") != url and _same_story(article.title, candidate.get("title", "")):
@@ -144,4 +152,5 @@ class ResearchPipeline:
 def run_research(query: str) -> str:
     pipeline = ResearchPipeline()
     state, ranked = pipeline.run(query)
-    return format_report(state, ranked, pipeline.mode)
+    readable = [a for a in ranked if a.content]
+    return format_report(state, readable or ranked, pipeline.mode)

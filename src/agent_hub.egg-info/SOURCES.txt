@@ -19,6 +19,15 @@ src/hub/state.py
 src/hub/supervisor.py
 src/hub/agents/__init__.py
 src/hub/agents/base.py
+src/hub/agents/code/__init__.py
+src/hub/agents/code/graph.py
+src/hub/agents/code/prompts.py
+src/hub/agents/code/report.py
+src/hub/agents/code/security.py
+src/hub/agents/code/settings.py
+src/hub/agents/code/spec.py
+src/hub/agents/code/state.py
+src/hub/agents/code/tools.py
 src/hub/agents/context/__init__.py
 src/hub/agents/context/cli.py
 src/hub/agents/context/config.py
@@ -73,6 +82,7 @@ src/hub/tools/builtin.py
 src/hub/tools/mcp.py
 src/hub/tools/registry.py
 tests/test_cli_formatting.py
+tests/test_code_agent.py
 tests/test_context_agent.py
 tests/test_hub.py
 tests/test_model_router.py
@@ -82,3 +92,4 @@ tests/test_qa_project.py
 tests/test_qa_upgrade.py
 tests/test_research_agent.py
 tests/test_telegram_interface.py
+tests/test_ui_rendering_update.py
