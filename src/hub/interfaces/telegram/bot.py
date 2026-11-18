@@ -21,7 +21,6 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
-from ...config import MODEL_POOL
 from ...graph import build_hub
 from ...memory import MemoryStore
 from ...model_router import TRACKER
@@ -403,3 +402,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

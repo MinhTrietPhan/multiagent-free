@@ -49,7 +49,7 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
             tree = ast.parse(source)
     except SyntaxError:
         clean = '\n'.join((l for l in source.splitlines() if l.strip()))
-        return {'skeleton': [f'# (syntax error, raw lines kept)'], 'clean': clean, 'imports': [], 'has_main': False}
+        return {'skeleton': ['# (syntax error, raw lines kept)'], 'clean': clean, 'imports': [], 'has_main': False}
     imports, skel = ([], [])
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
@@ -63,3 +63,4 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
             imports += [f'{base}.{a.name}' if n.module else f'{base}{a.name}' for a in n.names]
     _walk_defs(tree.body, 0, loc, skel)
     return {'skeleton': skel, 'clean': source if keep_source else ast.unparse(tree), 'imports': imports, 'has_main': any((_is_main_guard(n) for n in tree.body))}
+

@@ -216,7 +216,7 @@ def project_map(root: Path, cap: int) -> str:
         skeleton = "\n".join(analyze(text)["skeleton"]) or "(không có định nghĩa cấp cao)"
         block = f"# {rel}\n{skeleton}"[:1800]
         if size + len(block) + 1 > cap:
-            blocks.append(f"... (còn nhiều file Python khác, bản đồ đã đầy)")
+            blocks.append("... (còn nhiều file Python khác, bản đồ đã đầy)")
             break
         blocks.append(block)
         size += len(block) + 1
@@ -767,3 +767,4 @@ def run_checks(root: Path, commands: list[list[str]], timeout: int, budget: Tool
 def summarize_failures(results: list[dict], limit: int = 3000) -> str:
     chunks = [f"$ {r['cmd']}\n{r['output']}" for r in results if not r["ok"]]
     return "\n\n".join(chunks)[-limit:]
+

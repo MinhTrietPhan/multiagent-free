@@ -1,5 +1,4 @@
 """Deterministic, read-only project search subagent."""
-from pathlib import Path
 from langchain_core.messages import AIMessage
 from ..qa.project import resolve_project_root
 from ...tools.builtin import register_builtin_tools
@@ -31,3 +30,4 @@ def search_node(state):
         "messages": [AIMessage(f"Project search trong `{root}`:\n\n{result}", name="search")],
         "active_project_root": str(root),
     }
+

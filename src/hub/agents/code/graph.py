@@ -282,7 +282,7 @@ def build_code_graph(llm_factory=None, backup_root: Path | None = None):
             return {"stopped": True, "next_action": ""}
         update = {"round": state.get("round", 1) + 1, "repair_attempts": 0, "feedback": "", "next_action": "",
                   "round_goal": f"Trả lời câu hỏi của agent: {answer[:300]}"}
-        update["request"] = _follow_up_request({**state, **update}, f"Hãy hoàn thành phần còn lại dựa trên câu trả lời.",
+        update["request"] = _follow_up_request({**state, **update}, "Hãy hoàn thành phần còn lại dựa trên câu trả lời.",
                                                extra=f"[Agent hỏi] {question}\n[Người dùng trả lời] {answer}")
         return update
 
@@ -349,3 +349,4 @@ def build_code_graph(llm_factory=None, backup_root: Path | None = None):
     g.add_conditional_edges("ask", after_ask, {"report": "report", "gather": "gather"})
     g.add_edge("report", END)
     return g.compile()
+

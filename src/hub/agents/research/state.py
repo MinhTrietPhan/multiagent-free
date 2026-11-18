@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -14,16 +14,15 @@ class Article:
     corroborating_sources: list[str] = field(default_factory=list)
     laya_score: float | None = None
     heuristic_score: float = 0.0
+    relevance_score: float = 0.0
     final_score: float = 0.0
     fetch_error: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 @dataclass
 class ResearchState:
     query: str
+    query_intent: str = "general"
     search_rounds: int = 0
     fetched_count: int = 0
     max_search_rounds: int = 3
@@ -35,10 +34,13 @@ class ResearchState:
     articles: list[Article] = field(default_factory=list)
     actions: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    evidence_level: str = "insufficient"
+    evidence_score: float = 0.0
 
     def compact(self) -> dict[str, Any]:
         return {
             "query": self.query[:300],
+            "query_intent": self.query_intent,
             "search_rounds": self.search_rounds,
             "fetched_count": self.fetched_count,
             "pending_count": len(self.pending_urls),
@@ -50,3 +52,4 @@ class ResearchState:
                 for a in self.articles[:5]
             ],
         }
+

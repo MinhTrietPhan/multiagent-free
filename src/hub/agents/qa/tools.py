@@ -216,28 +216,3 @@ def read_function(project_root: str, rel_path: str, func_name: str) -> str | Non
     if not ranges:
         return None
     return '\n# ---\n'.join((_emit(lines, s, e) for s, e in ranges[:MAX_MATCHES]))
-
-
-def find_project_root_from_context(context_text: str) -> str | None:
-    """Try to extract the project root path from a PROJECT_CONTEXT.md header.
-
-    The renderer writes a line like:  > Root: `D:\\path\\to\\project`
-    """
-    m = re.search('^>\\s*Root:\\s*`?([^`\\n]+)`?', context_text, re.M)
-    if m:
-        p = Path(m.group(1).strip())
-        if p.is_dir():
-            return str(p)
-    m = re.search('(?:Project|Root|Path|Dự án)[:\\s]+[`\\"\']?([A-Za-z]:\\\\[^\\s`\\"\']+|/[^\\s`\\"\']+)', context_text, re.I)
-    if m:
-        p = Path(m.group(1))
-        if p.is_dir():
-            return str(p)
-    m = re.search('^#\\s+(?:Project context:\\s*)?(.+)', context_text, re.M)
-    if m:
-        name = m.group(1).strip().strip('`')
-        for parent in [Path('.')]:
-            candidate = parent / name
-            if candidate.is_dir():
-                return str(candidate.resolve())
-    return None

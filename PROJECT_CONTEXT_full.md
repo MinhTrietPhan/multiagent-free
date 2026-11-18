@@ -1,8 +1,8 @@
 # Project context: agent-hub
 > Root: `D:\Trietdeptrai\agent-hub`
-> repo-context · mode=full · files=91 · full_code=91 · commit=5f972f9
+> repo-context · mode=full · files=91 · full_code=91 · commit=400386f
 > Reading guide: `[SKELETON]` = signatures + first docstring line only (`# L12` = line number; `c3:L5` = notebook cell 3, line 5). `[FULL]` = complete code, comments kept. `[CONFIG]` = config/doc file content. If you need the body of a skeleton file, ask the user for it by path.
-> ~94,812 tokens
+> ~94,811 tokens
 
 ## 1. Overview
 ### Stack
@@ -572,7 +572,6 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
-from ...config import MODEL_POOL
 from ...graph import build_hub
 from ...memory import MemoryStore
 from ...model_router import TRACKER
@@ -954,6 +953,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 ```
 
@@ -2022,7 +2022,7 @@ def build_code_graph(llm_factory=None, backup_root: Path | None = None):
             return {"stopped": True, "next_action": ""}
         update = {"round": state.get("round", 1) + 1, "repair_attempts": 0, "feedback": "", "next_action": "",
                   "round_goal": f"Trả lời câu hỏi của agent: {answer[:300]}"}
-        update["request"] = _follow_up_request({**state, **update}, f"Hãy hoàn thành phần còn lại dựa trên câu trả lời.",
+        update["request"] = _follow_up_request({**state, **update}, "Hãy hoàn thành phần còn lại dựa trên câu trả lời.",
                                                extra=f"[Agent hỏi] {question}\n[Người dùng trả lời] {answer}")
         return update
 
@@ -2089,6 +2089,7 @@ def build_code_graph(llm_factory=None, backup_root: Path | None = None):
     g.add_conditional_edges("ask", after_ask, {"report": "report", "gather": "gather"})
     g.add_edge("report", END)
     return g.compile()
+
 
 ```
 
@@ -2824,7 +2825,7 @@ def project_map(root: Path, cap: int) -> str:
         skeleton = "\n".join(analyze(text)["skeleton"]) or "(không có định nghĩa cấp cao)"
         block = f"# {rel}\n{skeleton}"[:1800]
         if size + len(block) + 1 > cap:
-            blocks.append(f"... (còn nhiều file Python khác, bản đồ đã đầy)")
+            blocks.append("... (còn nhiều file Python khác, bản đồ đã đầy)")
             break
         blocks.append(block)
         size += len(block) + 1
@@ -3376,6 +3377,7 @@ def summarize_failures(results: list[dict], limit: int = 3000) -> str:
     chunks = [f"$ {r['cmd']}\n{r['output']}" for r in results if not r["ok"]]
     return "\n\n".join(chunks)[-limit:]
 
+
 ```
 
 ### src/hub/agents/context/graph.py  [FULL]
@@ -3889,31 +3891,6 @@ def read_function(project_root: str, rel_path: str, func_name: str) -> str | Non
         return None
     return '\n# ---\n'.join((_emit(lines, s, e) for s, e in ranges[:MAX_MATCHES]))
 
-
-def find_project_root_from_context(context_text: str) -> str | None:
-    """Try to extract the project root path from a PROJECT_CONTEXT.md header.
-
-    The renderer writes a line like:  > Root: `D:\\path\\to\\project`
-    """
-    m = re.search('^>\\s*Root:\\s*`?([^`\\n]+)`?', context_text, re.M)
-    if m:
-        p = Path(m.group(1).strip())
-        if p.is_dir():
-            return str(p)
-    m = re.search('(?:Project|Root|Path|Dự án)[:\\s]+[`\\"\']?([A-Za-z]:\\\\[^\\s`\\"\']+|/[^\\s`\\"\']+)', context_text, re.I)
-    if m:
-        p = Path(m.group(1))
-        if p.is_dir():
-            return str(p)
-    m = re.search('^#\\s+(?:Project context:\\s*)?(.+)', context_text, re.M)
-    if m:
-        name = m.group(1).strip().strip('`')
-        for parent in [Path('.')]:
-            candidate = parent / name
-            if candidate.is_dir():
-                return str(candidate.resolve())
-    return None
-
 ```
 
 ### src/hub/agents/research/collectors/__init__.py  [FULL]
@@ -4425,6 +4402,7 @@ def choose_action(state: ResearchState, laya_engine=None, mode: str = "shadow") 
 ### src/hub/agents/research/processors/deduplicate.py  [FULL]
 ```python
 from __future__ import annotations
+
 import re
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
@@ -4432,37 +4410,64 @@ TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
 
 
 def canonical_url(url: str) -> str:
-    parts = urlsplit(url.strip())
+    parts = urlsplit((url or "").strip())
     query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
              if not k.lower().startswith("utm_") and k.lower() not in TRACKING_KEYS]
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), urlencode(query), ""))
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/") or "/",
+                       urlencode(query), ""))
 
 
 def title_key(title: str) -> set[str]:
-    return set(re.findall(r"[\w]{3,}", title.lower()))
+    """Normalised token set of a title, used for same-story similarity."""
+    return set(re.findall(r"[\w]+", (title or "").casefold()))
+
+
+def _host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower().removeprefix("www.")
+
+
+def _path(url: str) -> str:
+    return (urlsplit(url).path or "/").rstrip("/") or "/"
+
+
+def _similarity(left: set[str], right: set[str]) -> float:
+    union = left | right
+    return len(left & right) / len(union) if union else 1.0
 
 
 def deduplicate(rows: list[dict]) -> list[dict]:
-    output, urls, title_sets = [], set(), []
+    """Remove duplicate search hits while preserving same-path cross-publisher copies.
+
+    Exact canonical URLs are always removed. Near-identical titles are collapsed
+    within one publisher. Across publishers, retain a matching title only when
+    both publishers point to the same article path (syndicated coverage).
+    """
+    output: list[dict] = []
+    seen_urls: set[str] = set()
+    accepted: list[tuple[str, str, set[str]]] = []
+
     for row in rows:
         url = canonical_url(row.get("url", ""))
-        title = (row.get("title") or "").strip()
-        tokens = title_key(title)
-        if not url or url in urls:
+        if not url or url in seen_urls:
             continue
+        host, path = _host(url), _path(url)
+        tokens = title_key(row.get("title", ""))
         duplicate = False
-        for old in title_sets:
-            union = tokens | old
-            similarity = len(tokens & old) / len(union) if union else 0
-            if similarity >= 0.78:
+        for old_host, old_path, old_tokens in accepted:
+            if _similarity(tokens, old_tokens) < 0.78:
+                continue
+            # Same host: same story copied to another URL. Different hosts:
+            # different paths imply duplicate search noise; same path is retained.
+            if host == old_host or path != old_path:
                 duplicate = True
                 break
         if duplicate:
             continue
-        urls.add(url)
-        title_sets.append(tokens)
+        seen_urls.add(url)
+        accepted.append((host, path, tokens))
         output.append({**row, "url": url})
     return output
+
 
 ```
 
@@ -4521,7 +4526,7 @@ def rank_articles(articles: list[Article], laya_scores: dict[str, float] | None 
 ### src/hub/agents/research/state.py  [FULL]
 ```python
 from __future__ import annotations
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -4536,16 +4541,15 @@ class Article:
     corroborating_sources: list[str] = field(default_factory=list)
     laya_score: float | None = None
     heuristic_score: float = 0.0
+    relevance_score: float = 0.0
     final_score: float = 0.0
     fetch_error: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 @dataclass
 class ResearchState:
     query: str
+    query_intent: str = "general"
     search_rounds: int = 0
     fetched_count: int = 0
     max_search_rounds: int = 3
@@ -4557,10 +4561,13 @@ class ResearchState:
     articles: list[Article] = field(default_factory=list)
     actions: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    evidence_level: str = "insufficient"
+    evidence_score: float = 0.0
 
     def compact(self) -> dict[str, Any]:
         return {
             "query": self.query[:300],
+            "query_intent": self.query_intent,
             "search_rounds": self.search_rounds,
             "fetched_count": self.fetched_count,
             "pending_count": len(self.pending_urls),
@@ -4572,6 +4579,7 @@ class ResearchState:
                 for a in self.articles[:5]
             ],
         }
+
 
 ```
 
@@ -5571,7 +5579,7 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
             tree = ast.parse(source)
     except SyntaxError:
         clean = '\n'.join((l for l in source.splitlines() if l.strip()))
-        return {'skeleton': [f'# (syntax error, raw lines kept)'], 'clean': clean, 'imports': [], 'has_main': False}
+        return {'skeleton': ['# (syntax error, raw lines kept)'], 'clean': clean, 'imports': [], 'has_main': False}
     imports, skel = ([], [])
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
@@ -5585,6 +5593,7 @@ def analyze(source: str, loc: str='L', keep_source: bool=False) -> Parsed:
             imports += [f'{base}.{a.name}' if n.module else f'{base}{a.name}' for a in n.names]
     _walk_defs(tree.body, 0, loc, skel)
     return {'skeleton': skel, 'clean': source if keep_source else ast.unparse(tree), 'imports': imports, 'has_main': any((_is_main_guard(n) for n in tree.body))}
+
 
 ```
 
@@ -5907,7 +5916,6 @@ SPEC = AgentSpec(
 ### src/hub/agents/search/node.py  [FULL]
 ```python
 """Deterministic, read-only project search subagent."""
-from pathlib import Path
 from langchain_core.messages import AIMessage
 from ..qa.project import resolve_project_root
 from ...tools.builtin import register_builtin_tools
@@ -5939,6 +5947,7 @@ def search_node(state):
         "messages": [AIMessage(f"Project search trong `{root}`:\n\n{result}", name="search")],
         "active_project_root": str(root),
     }
+
 
 ```
 
@@ -6186,7 +6195,6 @@ def iter_project_files(root: str | Path, *, max_files: int = 20000):
 """Filesystem-based Agent Skills loader. Skills are plain SKILL.md directories."""
 from dataclasses import dataclass
 from pathlib import Path
-import os
 import re
 
 @dataclass(frozen=True)
@@ -6228,6 +6236,7 @@ class SkillRegistry:
             if score:
                 scored.append((score, skill))
         return [s for _, s in sorted(scored, key=lambda x: (-x[0], x[1].name))[:limit]]
+
 
 ```
 
