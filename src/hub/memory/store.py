@@ -28,6 +28,26 @@ class MemoryStore:
         with self._connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, thread_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, agent TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, id)")
+            db.execute("CREATE TABLE IF NOT EXISTS thread_state (thread_id TEXT PRIMARY KEY, active_project_root TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+
+    def set_active_project(self, thread_id: str, root: str | Path | None):
+        """Remember the project a thread is working on (survives a CLI restart)."""
+        with self._connect() as db:
+            if root:
+                db.execute(
+                    "INSERT INTO thread_state(thread_id, active_project_root) VALUES (?, ?) "
+                    "ON CONFLICT(thread_id) DO UPDATE SET active_project_root=excluded.active_project_root, updated_at=CURRENT_TIMESTAMP",
+                    (thread_id, str(root)),
+                )
+            else:
+                db.execute("DELETE FROM thread_state WHERE thread_id=?", (thread_id,))
+
+    def get_active_project(self, thread_id: str) -> str | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT active_project_root FROM thread_state WHERE thread_id=?", (thread_id,)
+            ).fetchone()
+        return row[0] if row and row[0] else None
 
     def save_turn(self, thread_id: str, user_text: str, assistant_text: str, agent: str | None = None):
         with self._connect() as db:
@@ -62,3 +82,16 @@ class MemoryStore:
     def read_project_memory(root: str | Path = ".") -> str:
         p = Path(root) / ".hub" / "project_memory.md"
         return p.read_text(encoding="utf-8") if p.is_file() else ""
+
+    @staticmethod
+    def append_project_memory(root: str | Path, note: str) -> Path:
+        """Append one durable fact to <project>/.hub/project_memory.md (read by QA every turn)."""
+        note = note.strip()
+        if not note:
+            raise ValueError("Memory note cannot be empty")
+        path = Path(root) / ".hub" / "project_memory.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(("\n" if path.stat().st_size else "") + f"- {note}\n")
+        return path
+

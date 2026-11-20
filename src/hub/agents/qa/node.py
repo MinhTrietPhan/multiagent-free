@@ -1,4 +1,10 @@
-"""QA agent: resolve a project, optionally load its context, then inspect source code."""
+"""QA agent: resolve a project, build an on-the-fly index, then inspect source code on demand.
+
+The project index (``hub.mini_map``) is rendered in memory on every question: it lists the
+directory tree, entry points and file counts but never contains code and never reads or
+creates ``PROJECT_CONTEXT*.md``. When the index is not enough, the model asks for specific
+files/functions and Python reads them inside the project root.
+"""
 import json
 import os
 import re
@@ -6,16 +12,16 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from ...model_router import get_llm
 from .prompts import SYSTEM_PROMPT, CONTEXT_HEADER, EXTRA_CODE_HEADER, NEED_MORE_CODE_INSTRUCTION
-from .project import load_project_context, resolve_project_root
+from .project import resolve_project_root
+from .history import history_messages
 from ...memory import MemoryStore
+from ...mini_map import build_mini_map
 from ...skills import SkillRegistry
 from ...tools.builtin import register_builtin_tools
 from ...tools.registry import get_tool_registry
 QA_NAME = 'qa'
 MAX_EXTRA_READS = int(os.getenv('HUB_QA_MAX_READS', '2'))
-HISTORY_TURNS = int(os.getenv('HUB_QA_HISTORY_TURNS', '3'))
-HISTORY_CHARS = 1500
-DEFAULT_CONTEXT_CHARS = 24000
+MAX_EXPLICIT_CONTEXT_CHARS = int(os.getenv('HUB_QA_EXPLICIT_CONTEXT_CHARS', '60000'))
 _PATH_RE = re.compile(r'"([^"]+\.md)"|\'([^\']+\.md)\'|([A-Za-z]:[\\/][^"\'`\n]*?\.md)|(\S+\.md)', re.I)
 
 
@@ -41,42 +47,9 @@ def _last_user_text(state) -> str:
     return ''
 
 
-def _clip(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[:limit].rstrip() + ' …'
-
-
-def _compact_project_context(context: str, max_chars: int | None = None) -> str:
-    """Keep the project map, not every full source file, in the initial Gemini prompt."""
-    if max_chars is None:
-        try:
-            max_chars = max(2000, int(os.getenv("HUB_QA_CONTEXT_CHARS", str(DEFAULT_CONTEXT_CHARS))))
-        except ValueError:
-            max_chars = DEFAULT_CONTEXT_CHARS
-
-    # Full source is retrieved on demand with read_file/read_function. Keeping it
-    # in the context prompt duplicates thousands of tokens and can exhaust quota.
-    compact = re.sub(
-        r"(?ms)(^### .*?\[FULL\]\s*\n```[^\n]*\n).*?(^```\s*$)",
-        r"\1# Full source omitted from initial context; retrieve this file with QA tools.\n\2",
-        context,
-    )
-    return _clip(compact, max_chars)
-
-
-def _history(state, max_turns: int=HISTORY_TURNS) -> list:
-    """Vài lượt hỏi–đáp QA gần nhất (không gồm câu hỏi hiện tại), bỏ dòng nguồn để đỡ tốn token."""
-    msgs = list(state.get('messages', []))
-    last = max((i for i, m in enumerate(msgs) if getattr(m, 'type', '') == 'human'), default=None)
-    if last is None or max_turns <= 0:
-        return []
-    prev = msgs[:last]
-    pairs = [(a, b) for a, b in zip(prev, prev[1:]) if getattr(a, 'type', '') == 'human' and getattr(b, 'type', '') == 'ai' and (getattr(b, 'name', None) == QA_NAME)]
-    out: list = []
-    for human, ai in pairs[-max_turns:]:
-        q = _clip(_content_to_text(human.content), HISTORY_CHARS)
-        a = _clip(_content_to_text(ai.content).split('\n\n---\n')[0], HISTORY_CHARS)
-        out += [HumanMessage(content=f'Câu hỏi: {q}'), AIMessage(content=a)]
-    return out
+def _history(state, max_turns: int | None=None) -> list:
+    """Lịch sử hội thoại đã nén (2 lượt nguyên văn + tóm tắt các lượt cũ), xem `history.py`."""
+    return history_messages(state, max_turns=max_turns)
 
 
 def _extract_md_path(text: str) -> tuple[str, str] | None:
@@ -93,21 +66,24 @@ def _extract_md_path(text: str) -> tuple[str, str] | None:
     return None
 
 
-def _load_context_with_path(project_root: str | Path | None = None) -> tuple[str, Path] | None:
-    """Load context only from the selected project; never use a global context file."""
-    if project_root is None:
-        # Compatibility only: inspect the current directory, never recurse or use HUB_CONTEXT_FILE.
-        root = Path.cwd()
-        context, path = load_project_context(root)
-    else:
-        context, path = load_project_context(project_root)
-    return (context, path) if context is not None and path is not None else None
+def _read_explicit_context(text: str) -> tuple[str, str | None, Path | None, str | None]:
+    """Nếu người dùng chỉ định rõ một file .md, nạp nó. Trả (câu hỏi, nội dung, đường dẫn, lỗi)."""
+    found = _extract_md_path(text)
+    if found is None:
+        return text, None, None, None
+    raw, cleaned = found
+    candidate = Path(cleaned).expanduser()
+    if candidate.is_file():
+        context = candidate.read_text(encoding="utf-8", errors="ignore")
+        if len(context) > MAX_EXPLICIT_CONTEXT_CHARS:
+            context = context[:MAX_EXPLICIT_CONTEXT_CHARS].rstrip() + "\n... (file context đã bị cắt bớt)"
+        path = candidate.resolve()
+        return text.replace(raw, "(file context đã được nạp sẵn)").strip(), context, path, None
+    if candidate.is_absolute() or "/" in cleaned or "\\" in cleaned:
+        hint = "\nNếu file nằm trên Desktop, thử `...\\OneDrive\\Desktop\\...`." if "desktop" in cleaned.lower() else ""
+        return text, None, None, f"⚠️ Không tìm thấy file: `{cleaned}`\nKiểm tra lại đường dẫn.{hint}"
+    return text, None, None, None
 
-
-def _load_context() -> str | None:
-    """Compatibility helper; callers must supply a selected project root."""
-    found = _load_context_with_path()
-    return found[0] if found else None
 
 def _parse_need_file(response_text: str) -> dict | None:
     """Check if the LLM response is a JSON request for more code."""
@@ -134,29 +110,16 @@ def _as_int(value) -> int | None:
 
 
 def qa_node(state) -> dict:
-    """Answer about one explicitly or uniquely selected project; context is optional."""
+    """Answer about one explicitly or uniquely selected project using an on-the-fly index."""
     question = _last_user_text(state)
 
-    # A user may explicitly point to a context markdown file. Its embedded root wins;
-    # otherwise its parent directory is treated as the project root.
-    explicit_context = _extract_md_path(question)
-    context_text = context_path = None
-    if explicit_context:
-        raw, cleaned = explicit_context
-        candidate = Path(cleaned).expanduser()
-        if candidate.is_file():
-            context_text = candidate.read_text(encoding="utf-8", errors="ignore")
-            context_path = candidate.resolve()
-            project_root = candidate.parent.resolve()
-            question = question.replace(raw, "(file context đã được nạp sẵn)").strip()
-        elif candidate.is_absolute() or "/" in cleaned or "\\" in cleaned:
-            hint = "\nNếu file nằm trên Desktop, thử `...\\OneDrive\\Desktop\\...`." if "desktop" in cleaned.lower() else ""
-            return {"messages": [AIMessage(f"⚠️ Không tìm thấy file: `{cleaned}`\nKiểm tra lại đường dẫn.{hint}", name=QA_NAME)]}
-        else:
-            project_root = None
-    else:
-        project_root = None
+    # A user may explicitly point to a context markdown file; it wins over the auto index.
+    question, context_text, context_path, error = _read_explicit_context(question)
+    if error:
+        return {"messages": [AIMessage(error, name=QA_NAME)]}
 
+    # Its embedded root wins; otherwise its parent directory is treated as the project root.
+    project_root = context_path.parent.resolve() if context_path else None
     if project_root is None:
         try:
             project_root = resolve_project_root(state, question, allow_interrupt=not state.get("_parallel_execution", False))
@@ -166,15 +129,8 @@ def qa_node(state) -> dict:
             return {"messages": [AIMessage(f"⚠️ {exc}", name=QA_NAME)]}
 
     if context_text is None:
-        context_text, context_path = load_project_context(project_root)
-    if context_text is None:
-        context_text = (
-            "Chưa có PROJECT_CONTEXT*.md trong thư mục dự án. "
-            "Hãy đọc source code trực tiếp bằng search_project/read_file/read_function; "
-            "không được yêu cầu người dùng tạo context trước."
-        )
-    else:
-        context_text = _compact_project_context(context_text)
+        # Navigation index only: tree, entry points, counts. No file is created or read.
+        context_text = build_mini_map(project_root)
 
     register_builtin_tools()
     tool_registry = get_tool_registry()
@@ -195,8 +151,8 @@ def qa_node(state) -> dict:
 
     system_msg = SystemMessage(content=SYSTEM_PROMPT + "\n\n" +
         "PROJECT ROOT ĐANG ĐƯỢC PHÂN TÍCH: " + str(project_root) + "\n"
-        "Chỉ được đọc/tìm kiếm trong project root này. PROJECT_CONTEXT chỉ là tài liệu tham khảo; "
-        "nếu context mâu thuẫn với source code thì source code mới là nguồn đúng. "
+        "Chỉ được đọc/tìm kiếm trong project root này. Chỉ mục dự án là bản đồ điều hướng, "
+        "không phải nội dung code; nếu chỉ mục mâu thuẫn với source code thì source code mới là nguồn đúng. "
         "Không tự chuyển sang project khác."
         + ("\n\n" + "\n\n".join(memory_blocks) if memory_blocks else ""))
 
@@ -260,9 +216,9 @@ def qa_node(state) -> dict:
         answer = "Không thể lấy thêm code để trả lời đầy đủ. Dựa trên thông tin hiện có:\n\n" + answer
 
     if context_path:
-        sources = f"📄 Context: `{context_path}`"
+        sources = f"📄 File context bạn chỉ định: `{context_path}`"
     else:
-        sources = "📁 Không có PROJECT_CONTEXT; phân tích trực tiếp source code"
+        sources = "🗂️ Chỉ mục dự án: dựng trực tiếp từ source (không dùng file PROJECT_CONTEXT)"
     sources = f"{sources}\n📂 Project: `{project_root}`"
     if extra_labels:
         sources += f"\ncode bổ sung đã đọc: {', '.join(extra_labels)}"

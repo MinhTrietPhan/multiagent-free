@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
+import re
 import socket
 import time
 from datetime import datetime, timezone
@@ -218,6 +220,115 @@ def extract_text(html: str) -> str:
     return "\n".join(s.strip() for s in soup.get_text("\n").splitlines() if s.strip())
 
 
+_DATE_META = re.compile(
+    r"<meta[^>]+(?:property|name|itemprop)=[\"']"
+    r"(?:article:published_time|og:article:published_time|datePublished|datepublished|"
+    r"publish-date|pubdate|date)[\"'][^>]*content=[\"']([^\"']+)[\"']",
+    re.IGNORECASE,
+)
+_DATE_META_REVERSED = re.compile(
+    r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+(?:property|name|itemprop)=[\"']"
+    r"(?:article:published_time|og:article:published_time|datePublished|datepublished|"
+    r"publish-date|pubdate|date)[\"']",
+    re.IGNORECASE,
+)
+_JSONLD = re.compile(
+    r"<script[^>]+application/ld\+json[^>]*>(.*?)</script>", re.IGNORECASE | re.DOTALL
+)
+
+
+def _normalize_date(value: str | None) -> str | None:
+    """Return an ISO-8601 string for a publisher date, or None when unusable."""
+    if not value:
+        return None
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+        return parsed.isoformat()
+    except ValueError:
+        pass
+    for pattern in ("%Y/%m/%d %H:%M:%S", "%Y/%m/%d", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, pattern).isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _jsonld_dates(node) -> list[str]:
+    found: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in {"datePublished", "dateCreated", "uploadDate"} and isinstance(value, str):
+                found.append(value)
+            else:
+                found.extend(_jsonld_dates(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_jsonld_dates(item))
+    return found
+
+
+def extract_published(html: str) -> str | None:
+    """Extract the publication date from JSON-LD, meta tags, then Trafilatura."""
+    for block in _JSONLD.findall(html or ""):
+        try:
+            found = _jsonld_dates(json.loads(block.strip()))
+        except (ValueError, TypeError):
+            continue
+        for value in found:
+            normalized = _normalize_date(value)
+            if normalized:
+                return normalized
+
+    for pattern in (_DATE_META, _DATE_META_REVERSED):
+        for value in pattern.findall(html or ""):
+            normalized = _normalize_date(value)
+            if normalized:
+                return normalized
+
+    try:
+        import trafilatura
+
+        metadata = trafilatura.extract_metadata(html or "")
+        normalized = _normalize_date(getattr(metadata, "date", None))
+        if normalized:
+            return normalized
+    except Exception:
+        pass
+    return None
+
+
+def fetch_article_meta(url: str) -> tuple[str, str, str | None]:
+    """Fetch one article: text, final URL and publication date (when published)."""
+    html, final_url = fetch_html(url)
+    published = extract_published(html)
+    text = extract_text(html)
+    if len(text) >= 200 or os.getenv("HUB_RESEARCH_BROWSER_FALLBACK", "true").lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        return text, final_url, published
+
+    # Use a real browser only for a successful but JS-rendered/thin page.
+    # If Playwright is unavailable or rendering fails, preserve the HTTP result
+    # so the pipeline can still use the search snippet.
+    try:
+        browser_text, browser_url = _fetch_with_browser(final_url)
+        return browser_text, browser_url, published
+    except FetchError as exc:
+        if exc.category in {"access_denied", "rate_limited", "access_challenge"}:
+            raise
+        return text, final_url, published
+    except Exception:
+        return text, final_url, published
+
+
+def fetch_article(url: str) -> tuple[str, str]:
+    """Backward-compatible wrapper: text and final URL only."""
+    text, final_url, _published = fetch_article_meta(url)
+    return text, final_url
+
+
 def _fetch_with_browser(url: str, timeout: int = 15) -> tuple[str, str]:
     """Render a public JS page; this is not a CAPTCHA or access-control bypass."""
     try:
@@ -260,25 +371,3 @@ def _fetch_with_browser(url: str, timeout: int = 15) -> tuple[str, str]:
             return text, page.url
         finally:
             browser.close()
-
-
-def fetch_article(url: str) -> tuple[str, str]:
-    html, final_url = fetch_html(url)
-    text = extract_text(html)
-    if len(text) >= 200 or os.getenv("HUB_RESEARCH_BROWSER_FALLBACK", "true").lower() not in {
-        "1", "true", "yes", "on"
-    }:
-        return text, final_url
-
-    # Use a real browser only for a successful but JS-rendered/thin page.
-    # If Playwright is unavailable or rendering fails, preserve the HTTP result
-    # so the pipeline can still use the search snippet.
-    try:
-        browser_text, browser_url = _fetch_with_browser(final_url)
-        return browser_text, browser_url
-    except FetchError as exc:
-        if exc.category in {"access_denied", "rate_limited", "access_challenge"}:
-            raise
-        return text, final_url
-    except Exception:
-        return text, final_url

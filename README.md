@@ -7,7 +7,7 @@ Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và
 | `qa` | Hỏi đáp, phân tích kiến trúc/source code | Gemini |
 | `search` | Tìm kiếm read-only trong source dự án | Python |
 | `context` | Tạo/cập nhật Project Context | Python |
-| `research` | Search web, fetch, extract, deduplicate, verify và rank bài viết | Laya + Python; không gọi Gemini trong research loop |
+| `research` | LLM lập kế hoạch, search web, fetch/extract, dedup, kiểm chứng chéo, rank và tóm tắt | Gemini (2 request/lần) + Python |
 | `code` | Đọc, sửa và tạo source code trong dự án; xin phê duyệt trước khi ghi file; tự kiểm tra sau khi sửa | Gemini + Python (Python xử lý tối đa) |
 
 ## Architecture
@@ -19,10 +19,10 @@ CLI / Telegram Bot
       -> Orchestrator (chỉ phối hợp các agent parallel-safe)
 
 Research Agent
-  -> Research Controller
-  -> Laya Decision Engine (lazy-loaded, multilingual)
-  -> Python tools: Search / Fetch / Extract / Deduplicate / Verify
-  -> Laya experimental scoring + deterministic ranking baseline
+  -> Research Planner (Gemini: query, intent, nguồn ưu tiên)
+  -> Python tools: Search (DDGS + Google News RSS) / Select / Fetch+Extract / Deduplicate / Rank
+  -> Evidence policy (digest ≥5 câu chuyện, verify ≥2 nguồn độc lập)
+  -> Article Summarizer (Gemini: top 5 tin sạch, lọc trùng/giật tít)
   -> Report
 
 Code Agent (LangGraph subgraph)
@@ -31,7 +31,7 @@ Code Agent (LangGraph subgraph)
               ^---- repair loop ----|      ^---- next round / ask user ----|
 ```
 
-Research Agent và Code Agent đều là agent độc lập, `parallel_safe=False`. Laya là decision engine bên trong Research Agent, không phải agent ngang hàng. Research Agent không import ModelRouter và không gọi Gemini trong vòng lặp tìm kiếm/thu thập.
+Research Agent và Code Agent đều là agent độc lập, `parallel_safe=False`. Research Agent dùng Gemini đúng 2 lần mỗi lần chạy (lập kế hoạch và tóm tắt); toàn bộ vòng lặp tìm kiếm/chọn/tải/xếp hạng là Python deterministic với ngân sách cứng.
 
 ## Install
 
@@ -48,13 +48,13 @@ Các extra (cài thêm khi cần):
 
 | Extra | Dùng cho |
 |---|---|
-| `research` | Research Agent (Laya, ddgs, requests, trafilatura, beautifulsoup4) |
+| `research` | Research Agent (ddgs, requests, trafilatura, beautifulsoup4) |
 | `telegram` | Telegram Bot (`python-telegram-bot`) |
 | `dev` | `pytest` |
 | `tokens` | Đếm token chính xác (`tiktoken`); mặc định ước lượng chars/4 |
 | `mcp` | MCP bridge (`langchain-mcp-adapters`) |
 
-Điền `GOOGLE_API_KEY` trong `.env` nếu dùng QA, Supervisor hoặc Code Agent. Research Agent không cần Gemini API key.
+Điền `GOOGLE_API_KEY` trong `.env` nếu dùng QA, Supervisor hoặc Code Agent. Research Agent dùng Gemini cho planner/summarizer; đặt `HUB_RESEARCH_LLM=false` để chạy hoàn toàn bằng Python mà không cần API key.
 
 Mỗi lần mở terminal mới, kích hoạt lại môi trường trước khi chạy:
 
@@ -78,7 +78,7 @@ hub
 
 Các lệnh `/qa`, `/search`, `/context`, `/research`, `/code` gọi agent trực tiếp và bỏ qua Supervisor routing. Câu hỏi không có prefix sẽ được Supervisor định tuyến bằng một model nhỏ; Supervisor có thể không chọn `code` khi bạn muốn sửa code, vì vậy **hãy gọi `/code` trực tiếp**.
 
-Các lệnh khác trong CLI: `/skills`, `/tools`, `/tool <name> <JSON>`, `/history`, `/memory`, `/reset`, `exit`.
+Các lệnh khác trong CLI: `/skills`, `/tools`, `/tool <name> <JSON>`, `/history`, `/memory`, `/remember`, `/reset`, `exit`.
 
 Chạy độc lập Context Agent (không dùng LLM):
 
@@ -199,51 +199,38 @@ src/hub/agents/code/
 
 `approval` và `ask` là các node riêng, không gọi LLM: LangGraph chạy lại cả node bị gián đoạn khi resume, nên cách này đảm bảo patch bạn đã duyệt chính là patch được áp dụng.
 
-## Research Agent (Laya)
+## Research Agent
 
-- Search: `ddgs` (DuckDuckGo search).
-- Fetch: `requests`, chỉ HTTP(S), kiểm tra public IP, chặn localhost/private/reserved IP, giới hạn redirect, timeout và 2 MB/trang.
-- Extract: Trafilatura; BeautifulSoup là fallback.
-- Processing: Python dedup URL/title, giữ evidence từ nhiều domain để đo corroboration.
-- Decision: Laya chọn trong tập action hữu hạn `FETCH_NEXT`, `SEARCH_MORE`, `VERIFY_TOP`, `STOP`.
-- Ranking: baseline minh bạch kết hợp freshness, heuristic source quality, corroboration và độ đầy đủ nội dung. Laya ordinal score được lưu riêng và chỉ ảnh hưởng final score ở chế độ `active`.
+Pipeline: **LLM lập kế hoạch → tìm kiếm → chọn URL → tải & trích nội dung → xếp hạng → kiểm tra bằng chứng → LLM tóm tắt/lọc → báo cáo**.
 
-### Laya modes
+- **Planner** (Gemini, đúng 1 request/lần): sinh tối đa 3 query, `intent` (`digest` = tổng hợp tin, `verify` = kiểm chứng), domain ưu tiên và `recency_days`. Domain chỉ để cộng điểm, **không chặn** nguồn khác. LLM tắt/lỗi/hết quota → fallback 3 query tiếng Việt, research vẫn chạy.
+- **Search**: `ddgs` (DuckDuckGo news + text) và **Google News RSS** (`hl=vi&gl=VN`), gộp rồi dedup theo URL và tiêu đề. Một backend lỗi thì backend còn lại vẫn trả kết quả.
+- **Chọn trước khi tải**: chấm relevance + độ mới + uy tín nguồn, tối đa 4 URL/vòng, ≤2 bài/domain, 1 bài/câu chuyện mỗi vòng — tránh dồn ngân sách vào bài rác. Với `verify`, các bản sao cùng câu chuyện được tải ở vòng sau để đối chiếu độc lập.
+- **Fetch**: `requests`, chỉ HTTP(S), chặn localhost/private/reserved IP, giới hạn redirect, timeout và 2 MB/trang. Trafilatura trích nội dung; Playwright là fallback cho trang render JS. Tối đa 12k ký tự/bài.
+- **Ngày đăng thật**: JSON-LD `datePublished` → `article:published_time` → Trafilatura metadata. Thiếu ngày thì bị hạ tín hiệu thay vì tự bịa.
+- **Ranking** (cộng = 1.0): relevance 40%, độ mới 25%, uy tín nguồn 20%, xác nhận chéo 10%, độ đầy đủ 5%. Câu hỏi toàn stopword tự chuyển sang trọng số mới/uy tín.
+- **Điều kiện dừng** theo intent:
+  - `digest`: ≥5 câu chuyện khác nhau từ ≥2 domain.
+  - `verify`: câu chuyện trọng tâm có ≥2 **nguồn độc lập** (fingerprint nội dung; bản syndication không được tính là nguồn thứ hai).
+- **Summarizer** (Gemini, đúng 1 request/lần): chọn top 5 tin sạch, 2–3 câu/tin, nêu số liệu nếu có, loại trùng/giật tít/PR/ngoài chủ đề. LLM lỗi → fallback trích **2 câu hoàn chỉnh**, không cắt giữa câu.
+- **Report**: ≤3500 ký tự, mỗi tin có domain, thời gian, xác nhận chéo, URL và dòng "Đã lọc: …".
 
-`HUB_RESEARCH_LAYA_MODE=shadow` là mặc định. Laya được gọi để dự đoán action và chấm điểm, nhưng Python policy vẫn quyết định thao tác thật và ranking vẫn dùng baseline. Đây là chế độ nên dùng để benchmark.
-
-- `shadow`: chạy song song để so sánh, không để Laya điều khiển thực tế.
-- `active`: cho Laya chọn action và kết hợp điểm Laya vào ranking; chỉ bật sau benchmark held-out.
-- `off`: không load Laya; dùng Python policy và ranking baseline.
-
-Cấu hình trong `.env`:
+Chi phí: đúng **2 request Gemini/lần research**. Đặt `HUB_RESEARCH_LLM=false` để chạy thuần Python (0 request), vẫn có relevance, evidence và báo cáo sạch.
 
 ```env
-HUB_LAYA_MODEL=multilingual
-HUB_LAYA_DEVICE=cpu
-HUB_RESEARCH_LAYA_MODE=shadow
-HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
+HUB_RESEARCH_LLM=true
+HUB_MODEL_RESEARCH=
+HUB_RESEARCH_SEARCH_BACKENDS=ddgs,rss
+HUB_RESEARCH_MAX_SEARCH_ROUNDS=3
+HUB_RESEARCH_PAGES_PER_ROUND=4
 HUB_RESEARCH_MAX_PAGES=12
 HUB_RESEARCH_RESULTS_PER_QUERY=12
+HUB_RESEARCH_MIN_ITEMS=5
+HUB_RESEARCH_MAX_PER_DOMAIN=2
+HUB_RESEARCH_DEADLINE_SECONDS=90
 ```
 
-Laya được load lazy và tái sử dụng trong process. Để tránh Gemini token, research loop không gọi QA, Gemini hoặc Supervisor ở từng trang. Chỉ một lần routing ở Supervisor có thể phát sinh Gemini khi người dùng không gọi trực tiếp `/research`.
-
-### Important model limitation
-
-Model card hiện công bố checkpoint base multilingual đạt 0.342 trên benchmark typed-decisions, thấp hơn majority baseline 0.461 của benchmark đó. Đây không phải benchmark research tiếng Việt, nhưng đủ để không tin zero-shot decisions ngay. Vì vậy chế độ `shadow` là mặc định; không coi confidence là bảo đảm đúng.
-
-Điểm hiện tại **không phải điểm viral/trending**: pipeline chưa lấy view/share/engagement từ nền tảng mạng xã hội. Nó xếp hạng theo độ mới, tín hiệu uy tín nguồn, sự xác nhận từ domain khác và độ đầy đủ nội dung. Ngày đăng thiếu sẽ bị giảm tín hiệu thay vì tự bịa ngày.
-
-### Benchmark Laya
-
-Tạo JSONL theo schema trong `benchmarks/README.md`, sau đó chạy:
-
-```powershell
-python scripts/benchmark_laya_research.py benchmarks/my_labels.jsonl
-```
-
-Chỉ chuyển `active` khi Laya vượt baseline trên tập held-out, có kết quả theo từng loại action và ranking được kiểm tra bằng nhãn người dùng.
+`benchmarks/README.md` mô tả cách tạo bộ nhãn tay để đánh giá chất lượng báo cáo (độ liên quan, trùng lặp, độ phủ nguồn).
 
 ## QA / Search / Code: chọn project
 
@@ -256,8 +243,10 @@ HUB_PROJECT_SCAN_DEPTH=4
 ```
 
 - Khi người dùng nêu đường dẫn hoặc tên project, Agent Hub ưu tiên lựa chọn đó. Nếu có nhiều kết quả, agent hỏi chọn; nếu không tìm thấy, agent hỏi đường dẫn.
-- Project đã chọn được giữ trong thread. QA đọc `PROJECT_CONTEXT*.md` trong thư mục gốc nếu có; nếu không có, QA vẫn đọc source code trực tiếp. Source code luôn được ưu tiên khi khác với context.
-- Context Agent và lệnh `repo-context <project-path>` lưu `PROJECT_CONTEXT_<mode>.md` ngay trong thư mục project. Không dùng `HUB_CONTEXT_FILE` làm context toàn cục.
+- Project đã chọn được giữ trong thread. Mỗi câu hỏi, QA dựng **chỉ mục dự án** ngay trong RAM (cây thư mục + entry points + số file, tối đa `HUB_QA_MINIMAP_CHARS` ký tự, mặc định 3000) rồi tự đọc thêm file/hàm cụ thể khi thiếu thông tin. QA **không** tự đọc `PROJECT_CONTEXT*.md`; file đó giờ chỉ dùng khi bạn chỉ định rõ đường dẫn trong câu hỏi hoặc để người đọc/chia sẻ.
+- **Bộ nhớ hội thoại của QA** dùng một ngân sách chung `HUB_QA_HISTORY_CHARS` (mặc định 8000 ký tự): 2 lượt gần nhất giữ nguyên văn (`HUB_QA_VERBATIM_TURNS`, mỗi câu trả lời tối đa `HUB_QA_VERBATIM_CHARS`), các lượt cũ hơn được rút gọn thành trích yếu có nhãn `[qa]`/`[code]`/`[context]`, tối đa `HUB_QA_DIGEST_CHARS` mỗi lượt và `HUB_QA_HISTORY_TURNS` lượt. Nhờ vậy QA hiểu "cái đó / file kia / làm tiếp" mà không gửi lại toàn bộ hội thoại.
+- Thông tin phải sống qua nhiều phiên nên nằm trong memory, không nằm trong history: `/remember <ghi chú>` ghi vào `.hub/project_memory.md` của project đang làm việc (QA đọc mỗi lượt, tối đa 8000 ký tự), còn `/memory add <ghi chú>` ghi vào `~/.agent-hub/user_memory.md` cho mọi project. Project đang làm việc cũng được lưu theo thread trong SQLite nên mở lại CLI không phải chọn lại.
+- Context Agent và lệnh `repo-context <project-path>` lưu `PROJECT_CONTEXT_<mode>.md` ngay trong thư mục project (QA không tự nạp). Không dùng `HUB_CONTEXT_FILE` làm context toàn cục.
 
 ## Other components
 
@@ -276,4 +265,4 @@ conda activate agent-hub
 pytest -q
 ```
 
-Test không cần tải model Laya, không gọi Internet và không gọi Gemini (dùng mock/fake); `tests/conftest.py` cô lập test khỏi `.env` thật của bạn (ví dụ `HUB_WORKSPACE_ROOTS`, `HUB_DATA_DIR`). MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.
+Test không cần Internet, không cần Gemini và không cần model local (dùng fake); `tests/conftest.py` cô lập test khỏi `.env` thật của bạn (ví dụ `HUB_WORKSPACE_ROOTS`, `HUB_DATA_DIR`). MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.

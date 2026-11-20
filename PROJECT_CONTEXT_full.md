@@ -1,17 +1,16 @@
 # Project context: agent-hub
 > Root: `D:\Trietdeptrai\agent-hub`
-> repo-context · mode=full · files=91 · full_code=91 · commit=400386f
+> repo-context · mode=full · files=99 · full_code=99 · commit=182cc09
 > Reading guide: `[SKELETON]` = signatures + first docstring line only (`# L12` = line number; `c3:L5` = notebook cell 3, line 5). `[FULL]` = complete code, comments kept. `[CONFIG]` = config/doc file content. If you need the body of a skeleton file, ask the user for it by path.
-> ~94,811 tokens
+> ~118,048 tokens
 
 ## 1. Overview
 ### Stack
 - Declared dependencies: langchain-core, langchain-google-genai, langgraph, pydantic, python-dotenv
-- Third-party imports seen in code: bs4, ddgs, dotenv, langchain_core, langchain_google_genai, langchain_mcp_adapters, langgraph, laya, playwright, pydantic, pytest, requests, tiktoken, trafilatura
+- Third-party imports seen in code: bs4, ddgs, dotenv, langchain_core, langchain_google_genai, langchain_mcp_adapters, langgraph, playwright, pydantic, pytest, requests, tiktoken, trafilatura
 
 ### Entry points
 - `run_context.py`
-- `scripts/benchmark_laya_research.py`
 - `src/hub/agents/context/cli.py`
 - `src/hub/cli.py`
 - `src/hub/interfaces/telegram/bot.py`
@@ -20,8 +19,6 @@
 ```text
 ├── benchmarks/
 │   └── README.md
-├── scripts/
-│   └── benchmark_laya_research.py
 ├── src/
 │   └── hub/
 │       ├── agents/
@@ -58,6 +55,7 @@
 │       │   │   └── state.py
 │       │   ├── qa/
 │       │   │   ├── __init__.py
+│       │   │   ├── history.py
 │       │   │   ├── node.py
 │       │   │   ├── project.py
 │       │   │   ├── prompts.py
@@ -69,13 +67,14 @@
 │       │   │   │   └── search.py
 │       │   │   ├── controller/
 │       │   │   │   ├── __init__.py
-│       │   │   │   ├── decision_engine.py
 │       │   │   │   ├── pipeline.py
+│       │   │   │   ├── planner.py
 │       │   │   │   └── policy.py
 │       │   │   ├── processors/
 │       │   │   │   ├── __init__.py
 │       │   │   │   ├── deduplicate.py
-│       │   │   │   └── source_quality.py
+│       │   │   │   ├── source_quality.py
+│       │   │   │   └── synthesize.py
 │       │   │   ├── ranking/
 │       │   │   │   ├── __init__.py
 │       │   │   │   └── engine.py
@@ -111,6 +110,7 @@
 │       ├── config.py
 │       ├── graph.py
 │       ├── llm.py
+│       ├── mini_map.py
 │       ├── model_router.py
 │       ├── orchestrator.py
 │       ├── project_files.py
@@ -123,12 +123,18 @@
 │   ├── test_code_agent.py
 │   ├── test_context_agent.py
 │   ├── test_hub.py
+│   ├── test_mini_map.py
 │   ├── test_model_router.py
 │   ├── test_platform_features.py
 │   ├── test_qa_agent.py
+│   ├── test_qa_history.py
 │   ├── test_qa_project.py
 │   ├── test_qa_upgrade.py
 │   ├── test_research_agent.py
+│   ├── test_research_pipeline.py
+│   ├── test_research_planner.py
+│   ├── test_research_search.py
+│   ├── test_research_summary.py
 │   ├── test_telegram_interface.py
 │   └── test_ui_rendering_update.py
 ├── .env.example
@@ -143,7 +149,6 @@
 graph LR
   run_context_py["run_context.py"] --> src_hub_agents_context_config_py["src/hub/agents/context/config.py"]
   run_context_py["run_context.py"] --> src_hub_agents_context_graph_py["src/hub/agents/context/graph.py"]
-  scripts_benchmark_laya_research_py["scripts/benchmark_laya_research.py"] --> src_hub_agents_research_controller_decision_engine_py["src/hub/agents/research/controller/decision_engine.py"]
   src_hub_interfaces_telegram_bot_py["src/hub/interfaces/telegram/bot.py"] --> src_hub_interfaces_telegram___init___py["src/hub/interfaces/telegram/__init__.py"]
   tests_test_cli_formatting_py["tests/test_cli_formatting.py"] --> src_hub_cli_py["src/hub/cli.py"]
   tests_test_code_agent_py["tests/test_code_agent.py"] --> src_hub___init___py["src/hub/__init__.py"]
@@ -162,6 +167,7 @@ graph LR
   tests_test_hub_py["tests/test_hub.py"] --> src_hub_agents_base_py["src/hub/agents/base.py"]
   tests_test_hub_py["tests/test_hub.py"] --> src_hub_agents_context___init___py["src/hub/agents/context/__init__.py"]
   tests_test_hub_py["tests/test_hub.py"] --> src_hub_cli_py["src/hub/cli.py"]
+  tests_test_mini_map_py["tests/test_mini_map.py"] --> src_hub_mini_map_py["src/hub/mini_map.py"]
   tests_test_model_router_py["tests/test_model_router.py"] --> src_hub_model_router_py["src/hub/model_router.py"]
   tests_test_platform_features_py["tests/test_platform_features.py"] --> src_hub_memory___init___py["src/hub/memory/__init__.py"]
   tests_test_platform_features_py["tests/test_platform_features.py"] --> src_hub_skills___init___py["src/hub/skills/__init__.py"]
@@ -173,15 +179,15 @@ graph LR
   tests_test_qa_agent_py["tests/test_qa_agent.py"] --> src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"]
   tests_test_qa_agent_py["tests/test_qa_agent.py"] --> src_hub_agents_qa_tools_py["src/hub/agents/qa/tools.py"]
   tests_test_qa_agent_py["tests/test_qa_agent.py"] --> src_hub_registry_py["src/hub/registry.py"]
+  tests_test_qa_history_py["tests/test_qa_history.py"] --> src_hub_agents_qa_history_py["src/hub/agents/qa/history.py"]
   tests_test_qa_project_py["tests/test_qa_project.py"] --> src_hub_agents_qa_project_py["src/hub/agents/qa/project.py"]
   tests_test_qa_upgrade_py["tests/test_qa_upgrade.py"] --> src_hub_agents_qa_node_py["src/hub/agents/qa/node.py"]
+  tests_test_qa_upgrade_py["tests/test_qa_upgrade.py"] --> src_hub_mini_map_py["src/hub/mini_map.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_collectors___init___py["src/hub/agents/research/collectors/__init__.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_collectors_fetch_py["src/hub/agents/research/collectors/fetch.py"]
-  tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_controller_decision_engine_py["src/hub/agents/research/controller/decision_engine.py"]
-  tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_controller_pipeline_py["src/hub/agents/research/controller/pipeline.py"]
-  tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_controller_policy_py["src/hub/agents/research/controller/policy.py"]
   tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_processors_deduplicate_py["src/hub/agents/research/processors/deduplicate.py"]
-  %% +6 more edges omitted
+  tests_test_research_agent_py["tests/test_research_agent.py"] --> src_hub_agents_research_ranking_engine_py["src/hub/agents/research/ranking/engine.py"]
+  %% +17 more edges omitted
 ```
 
 ## 2. Files
@@ -201,6 +207,7 @@ import re
 import shutil
 import sys
 import textwrap
+from pathlib import Path
 from .config import MODEL_POOL
 from .graph import build_hub
 from .model_router import TRACKER
@@ -370,7 +377,7 @@ def help_text() -> str:
     lines = ['Chọn agent thẳng (không tốn request điều phối):']
     for a in AGENTS:
         lines.append(f"  /{a.name} <nội dung>   {a.description.split(':')[0]}")
-    lines += ['Không có prefix -> LLM tự chọn agent (tốn 1 request nhỏ).', 'Lệnh: /models · /agents · /skills · /tools · /tool <name> <JSON> · /history · /memory · /reset · /help · exit']
+    lines += ['Không có prefix -> LLM tự chọn agent (tốn 1 request nhỏ).', 'Lệnh: /models · /agents · /skills · /tools · /tool <name> <JSON> · /history · /memory · /remember · /reset · /help · exit']
     return '\n'.join(lines)
 
 
@@ -394,6 +401,14 @@ def _print_turn_notes():
             f"  ↳ Điều phối: {' → '.join(TRACKER.route_models)} (gõ /qa hoặc /context để bỏ bước này)",
             "dim", color,
         ))
+
+
+def _current_project(app, config: dict) -> str | None:
+    """Project the graph is working on right now (None before the first project-aware turn)."""
+    try:
+        return app.get_state(config).values.get("active_project_root")
+    except Exception:
+        return None
 
 
 def _restore_messages(store: MemoryStore, thread_id: str):
@@ -494,9 +509,21 @@ def main():
             if text.lower().startswith("/memory add "):
                 note = text[len("/memory add "):].strip()
                 store.append_user_memory(note)
-                print("Đã lưu ghi chú vào user memory.")
+                print("Đã lưu ghi chú vào user memory (mọi project).")
             else:
                 print(store.read_user_memory() or "User memory đang trống. Dùng /memory add <ghi chú> để lưu thủ công.")
+            continue
+        if cmd == "/remember":
+            note = text[len("/remember"):].strip()
+            if not note:
+                print("Cách dùng: /remember <ghi chú> — lưu vào .hub/project_memory.md của project đang làm việc.")
+                continue
+            root = _current_project(app, config) or store.get_active_project(thread_id)
+            if not root or not Path(root).is_dir():
+                print("Chưa có project đang làm việc. Hỏi /qa hoặc /code một câu trước rồi dùng lại /remember.")
+                continue
+            path = MemoryStore.append_project_memory(root, note)
+            print(f"Đã lưu vào {path}")
             continue
         if cmd == "/reset":
             thread_id = _new_thread_id(store)
@@ -515,7 +542,11 @@ def main():
         try:
             if restore_pending:
                 history = _restore_messages(store, thread_id)
-                result = app.invoke({"messages": history + [HumanMessage(body)], "forced": forced}, config)
+                seed = {"messages": history + [HumanMessage(body)], "forced": forced}
+                saved_root = store.get_active_project(thread_id)
+                if saved_root and Path(saved_root).is_dir():
+                    seed["active_project_root"] = saved_root
+                result = app.invoke(seed, config)
                 while "__interrupt__" in result:
                     print(_paint("\nCẦN BẠN CHỌN", "yellow", _color_enabled(), bold=True))
                     print(str(result["__interrupt__"][0].value))
@@ -540,6 +571,9 @@ def main():
         model_label = " → ".join(TRACKER.turn_models) or None
         print_agent_reply(label, reply, model=model_label)
         store.save_turn(thread_id, body, reply, agent or forced)
+        project_root = _current_project(app, config)
+        if project_root:
+            store.set_active_project(thread_id, project_root)
 
 
 if __name__ == "__main__":
@@ -995,6 +1029,279 @@ class AgentSpec:
 
 ```
 
+### src/hub/agents/research/controller/planner.py  [FULL]
+```python
+"""Turn a user question into a bounded, explicit research plan.
+
+The plan is the only place where the LLM decides *what to look for*:
+a small list of queries, the languages, the recency window and the intent
+(``digest`` = "give me today's news", ``verify`` = "is this claim true?").
+Everything after this step is deterministic and budgeted, so a bad or missing
+plan can only make research narrower, never run away.
+
+When the LLM is disabled, unavailable or returns invalid JSON, a deterministic
+fallback plan is used and research still works offline.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass, field
+from datetime import date
+
+from ....model_router import get_llm
+from ..processors.source_quality import APPROVED_DOMAINS
+
+INTENTS = {"digest", "verify"}
+MAX_QUERIES = 3
+MAX_DOMAINS = 3
+DEFAULT_RECENCY_DAYS = 7
+
+_JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+
+@dataclass
+class ResearchPlan:
+    queries: list[str]
+    intent: str = "digest"
+    domains: list[str] = field(default_factory=list)
+    recency_days: int = DEFAULT_RECENCY_DAYS
+    language: str = "vi"
+    origin: str = "fallback"          # "llm" | "fallback"
+    note: str = ""                    # why the fallback was used, if any
+
+    def as_dict(self) -> dict:
+        return {
+            "queries": list(self.queries),
+            "intent": self.intent,
+            "domains": list(self.domains),
+            "recency_days": self.recency_days,
+            "language": self.language,
+            "origin": self.origin,
+        }
+
+
+def llm_enabled(explicit: bool | None = None) -> bool:
+    if explicit is not None:
+        return explicit
+    return os.getenv("HUB_RESEARCH_LLM", "true").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
+
+
+def fallback_plan(query: str, *, language: str = "vi",
+                  recency_days: int = DEFAULT_RECENCY_DAYS, note: str = "") -> ResearchPlan:
+    """Deterministic plan used offline and whenever the LLM plan is unusable."""
+    base = " ".join(query.split())[:200]
+    variants = [base, f"{base} mới nhất", f"{base} phân tích"]
+    queries: list[str] = []
+    for variant in variants:
+        if variant and variant.casefold() not in {q.casefold() for q in queries}:
+            queries.append(variant)
+    return ResearchPlan(queries=queries[:MAX_QUERIES], intent="digest",
+                        domains=[], recency_days=recency_days,
+                        language=language, origin="fallback", note=note)
+
+
+def build_prompt(query: str, *, today: str | None = None,
+                 language: str = "vi", max_queries: int = MAX_QUERIES) -> str:
+    today = today or date.today().isoformat()
+    approved = ", ".join(APPROVED_DOMAINS)
+    return (
+        "Bạn là bộ lập kế hoạch tìm kiếm web cho một trợ lý research.\n"
+        f"Hôm nay là {today}.\n"
+        f"Câu hỏi người dùng: {query}\n\n"
+        "Trả về DUY NHẤT một JSON object theo schema:\n"
+        '{"intent": "digest|verify", "queries": ["..."], "domains": ["..."], '
+        '"recency_days": 7, "language": "vi"}\n\n'
+        "Quy tắc:\n"
+        f"- Tối đa {max_queries} query, cùng ngôn ngữ với câu hỏi.\n"
+        "- intent = \"digest\" khi người dùng muốn tổng hợp tin/tìm hiểu chung; "
+        "\"verify\" khi họ cần kiểm chứng một thông tin cụ thể.\n"
+        "- Query phải cụ thể, có mốc thời gian khi câu hỏi nói \"hôm nay/tuần này\".\n"
+        "- Không bịa sự kiện, không thêm chi tiết người dùng không nói.\n"
+        f"- domains chỉ được chọn trong danh sách nguồn đã duyệt: {approved}.\n"
+        "- recency_days trong khoảng 1-30.\n"
+        "Chỉ trả JSON, không giải thích."
+    )
+
+
+def _text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            block if isinstance(block, str) else block.get("text", "")
+            for block in content
+        )
+    return str(content)
+
+
+def _json_payload(raw: str) -> dict:
+    text = raw.strip()
+    match = _JSON_BLOCK.search(text)
+    if match:
+        text = match.group(1)
+    elif not text.startswith("{"):
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            raise ValueError("no JSON object in planner response")
+        text = text[start:end + 1]
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("planner response is not an object")
+    return data
+
+
+def _clean_queries(raw, fallback_text: str) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    queries: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        value = " ".join(item.split())[:200].strip()
+        if len(value) < 3:
+            continue
+        if value.casefold() not in {q.casefold() for q in queries}:
+            queries.append(value)
+    return queries[:MAX_QUERIES] or [fallback_text]
+
+
+def _clean_domains(raw) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    allowed = set(APPROVED_DOMAINS)
+    chosen: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        value = item.strip().lower().removeprefix("www.")
+        if value in allowed and value not in chosen:
+            chosen.append(value)
+    return chosen[:MAX_DOMAINS]
+
+
+def _int(value, default: int, low: int, high: int) -> int:
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def plan_from_payload(query: str, data: dict, *, language: str = "vi") -> ResearchPlan:
+    """Validate an LLM plan; raises ValueError when it cannot be used."""
+    intent = data.get("intent") if data.get("intent") in INTENTS else "digest"
+    queries = _clean_queries(data.get("queries"), query)
+    if not queries:
+        raise ValueError("planner returned no usable query")
+    return ResearchPlan(
+        queries=queries,
+        intent=intent,
+        domains=_clean_domains(data.get("domains")),
+        recency_days=_int(data.get("recency_days"), DEFAULT_RECENCY_DAYS, 1, 30),
+        language=str(data.get("language") or language)[:8],
+        origin="llm",
+    )
+
+
+class ResearchPlanner:
+    def __init__(self, llm_factory=None, enabled: bool | None = None,
+                 language: str | None = None):
+        self.llm_factory = llm_factory or get_llm
+        self.enabled = enabled
+        self.language = language or os.getenv("HUB_RESEARCH_LANGUAGE", "vi")
+
+    def plan(self, query: str) -> ResearchPlan:
+        query = " ".join((query or "").split())
+        if not query:
+            return fallback_plan("tin tức hôm nay", language=self.language)
+        if not llm_enabled(self.enabled):
+            return fallback_plan(query, language=self.language, note="LLM tắt (HUB_RESEARCH_LLM)")
+        try:
+            llm = self.llm_factory("research")
+            response = llm.invoke(build_prompt(query, language=self.language))
+            payload = _json_payload(_text(getattr(response, "content", response)))
+            return plan_from_payload(query, payload, language=self.language)
+        except Exception as exc:                      # quota, timeout, bad JSON, missing model
+            return fallback_plan(query, language=self.language,
+                                 note=f"LLM plan lỗi: {type(exc).__name__}")
+
+```
+
+### src/hub/agents/research/state.py  [FULL]
+```python
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Any
+
+from .controller.planner import ResearchPlan
+
+
+@dataclass
+class Article:
+    url: str
+    title: str
+    snippet: str = ""
+    source: str = ""
+    published_at: str | None = None
+    date_source: str = "unknown"          # search | metadata | unknown
+    content: str = ""
+    fingerprint: str | None = None        # content hash, used to detect syndicated copies
+    corroborating_sources: list[str] = field(default_factory=list)
+    heuristic_score: float = 0.0
+    relevance_score: float = 0.0
+    final_score: float = 0.0
+    fetch_error: str | None = None
+
+
+@dataclass
+class ResearchState:
+    query: str
+    plan: ResearchPlan | None = None
+    intent: str = "digest"
+    search_rounds: int = 0
+    fetched_count: int = 0
+    max_search_rounds: int = 3
+    max_pages: int = 12
+    pages_per_round: int = 4
+    min_items: int = 5
+    deadline_at: float = 0.0
+    pending_urls: list[dict[str, str]] = field(default_factory=list)
+    seen_urls: set[str] = field(default_factory=set)
+    queries_tried: list[str] = field(default_factory=list)
+    all_search_results: list[dict[str, str]] = field(default_factory=list)
+    search_evidence: list[dict[str, str]] = field(default_factory=list)
+    articles: list[Article] = field(default_factory=list)
+    skipped: list[dict[str, str]] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    evidence_level: str = "insufficient"
+    evidence_score: float = 0.0
+    stop_reason: str = ""
+
+    def compact(self) -> dict[str, Any]:
+        """Small, log-friendly summary (no article bodies)."""
+        return {
+            "query": self.query[:300],
+            "intent": self.intent,
+            "search_rounds": self.search_rounds,
+            "fetched_count": self.fetched_count,
+            "pending_count": len(self.pending_urls),
+            "article_count": len(self.articles),
+            "max_search_rounds": self.max_search_rounds,
+            "max_pages": self.max_pages,
+            "evidence_level": self.evidence_level,
+            "stop_reason": self.stop_reason,
+            "top_candidates": [
+                {"title": a.title[:100], "source": a.source, "published_at": a.published_at}
+                for a in sorted(self.articles, key=lambda item: item.final_score, reverse=True)[:5]
+            ],
+        }
+
+```
+
 ### src/hub/agents/context/cli.py  [FULL]
 ```python
 import argparse
@@ -1048,7 +1355,13 @@ __all__ = ["SPEC", "build_context"]
 
 ### src/hub/agents/qa/node.py  [FULL]
 ```python
-"""QA agent: resolve a project, optionally load its context, then inspect source code."""
+"""QA agent: resolve a project, build an on-the-fly index, then inspect source code on demand.
+
+The project index (``hub.mini_map``) is rendered in memory on every question: it lists the
+directory tree, entry points and file counts but never contains code and never reads or
+creates ``PROJECT_CONTEXT*.md``. When the index is not enough, the model asks for specific
+files/functions and Python reads them inside the project root.
+"""
 import json
 import os
 import re
@@ -1056,16 +1369,16 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from ...model_router import get_llm
 from .prompts import SYSTEM_PROMPT, CONTEXT_HEADER, EXTRA_CODE_HEADER, NEED_MORE_CODE_INSTRUCTION
-from .project import load_project_context, resolve_project_root
+from .project import resolve_project_root
+from .history import history_messages
 from ...memory import MemoryStore
+from ...mini_map import build_mini_map
 from ...skills import SkillRegistry
 from ...tools.builtin import register_builtin_tools
 from ...tools.registry import get_tool_registry
 QA_NAME = 'qa'
 MAX_EXTRA_READS = int(os.getenv('HUB_QA_MAX_READS', '2'))
-HISTORY_TURNS = int(os.getenv('HUB_QA_HISTORY_TURNS', '3'))
-HISTORY_CHARS = 1500
-DEFAULT_CONTEXT_CHARS = 24000
+MAX_EXPLICIT_CONTEXT_CHARS = int(os.getenv('HUB_QA_EXPLICIT_CONTEXT_CHARS', '60000'))
 _PATH_RE = re.compile(r'"([^"]+\.md)"|\'([^\']+\.md)\'|([A-Za-z]:[\\/][^"\'`\n]*?\.md)|(\S+\.md)', re.I)
 
 
@@ -1091,42 +1404,9 @@ def _last_user_text(state) -> str:
     return ''
 
 
-def _clip(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[:limit].rstrip() + ' …'
-
-
-def _compact_project_context(context: str, max_chars: int | None = None) -> str:
-    """Keep the project map, not every full source file, in the initial Gemini prompt."""
-    if max_chars is None:
-        try:
-            max_chars = max(2000, int(os.getenv("HUB_QA_CONTEXT_CHARS", str(DEFAULT_CONTEXT_CHARS))))
-        except ValueError:
-            max_chars = DEFAULT_CONTEXT_CHARS
-
-    # Full source is retrieved on demand with read_file/read_function. Keeping it
-    # in the context prompt duplicates thousands of tokens and can exhaust quota.
-    compact = re.sub(
-        r"(?ms)(^### .*?\[FULL\]\s*\n```[^\n]*\n).*?(^```\s*$)",
-        r"\1# Full source omitted from initial context; retrieve this file with QA tools.\n\2",
-        context,
-    )
-    return _clip(compact, max_chars)
-
-
-def _history(state, max_turns: int=HISTORY_TURNS) -> list:
-    """Vài lượt hỏi–đáp QA gần nhất (không gồm câu hỏi hiện tại), bỏ dòng nguồn để đỡ tốn token."""
-    msgs = list(state.get('messages', []))
-    last = max((i for i, m in enumerate(msgs) if getattr(m, 'type', '') == 'human'), default=None)
-    if last is None or max_turns <= 0:
-        return []
-    prev = msgs[:last]
-    pairs = [(a, b) for a, b in zip(prev, prev[1:]) if getattr(a, 'type', '') == 'human' and getattr(b, 'type', '') == 'ai' and (getattr(b, 'name', None) == QA_NAME)]
-    out: list = []
-    for human, ai in pairs[-max_turns:]:
-        q = _clip(_content_to_text(human.content), HISTORY_CHARS)
-        a = _clip(_content_to_text(ai.content).split('\n\n---\n')[0], HISTORY_CHARS)
-        out += [HumanMessage(content=f'Câu hỏi: {q}'), AIMessage(content=a)]
-    return out
+def _history(state, max_turns: int | None=None) -> list:
+    """Lịch sử hội thoại đã nén (2 lượt nguyên văn + tóm tắt các lượt cũ), xem `history.py`."""
+    return history_messages(state, max_turns=max_turns)
 
 
 def _extract_md_path(text: str) -> tuple[str, str] | None:
@@ -1143,21 +1423,24 @@ def _extract_md_path(text: str) -> tuple[str, str] | None:
     return None
 
 
-def _load_context_with_path(project_root: str | Path | None = None) -> tuple[str, Path] | None:
-    """Load context only from the selected project; never use a global context file."""
-    if project_root is None:
-        # Compatibility only: inspect the current directory, never recurse or use HUB_CONTEXT_FILE.
-        root = Path.cwd()
-        context, path = load_project_context(root)
-    else:
-        context, path = load_project_context(project_root)
-    return (context, path) if context is not None and path is not None else None
+def _read_explicit_context(text: str) -> tuple[str, str | None, Path | None, str | None]:
+    """Nếu người dùng chỉ định rõ một file .md, nạp nó. Trả (câu hỏi, nội dung, đường dẫn, lỗi)."""
+    found = _extract_md_path(text)
+    if found is None:
+        return text, None, None, None
+    raw, cleaned = found
+    candidate = Path(cleaned).expanduser()
+    if candidate.is_file():
+        context = candidate.read_text(encoding="utf-8", errors="ignore")
+        if len(context) > MAX_EXPLICIT_CONTEXT_CHARS:
+            context = context[:MAX_EXPLICIT_CONTEXT_CHARS].rstrip() + "\n... (file context đã bị cắt bớt)"
+        path = candidate.resolve()
+        return text.replace(raw, "(file context đã được nạp sẵn)").strip(), context, path, None
+    if candidate.is_absolute() or "/" in cleaned or "\\" in cleaned:
+        hint = "\nNếu file nằm trên Desktop, thử `...\\OneDrive\\Desktop\\...`." if "desktop" in cleaned.lower() else ""
+        return text, None, None, f"⚠️ Không tìm thấy file: `{cleaned}`\nKiểm tra lại đường dẫn.{hint}"
+    return text, None, None, None
 
-
-def _load_context() -> str | None:
-    """Compatibility helper; callers must supply a selected project root."""
-    found = _load_context_with_path()
-    return found[0] if found else None
 
 def _parse_need_file(response_text: str) -> dict | None:
     """Check if the LLM response is a JSON request for more code."""
@@ -1184,29 +1467,16 @@ def _as_int(value) -> int | None:
 
 
 def qa_node(state) -> dict:
-    """Answer about one explicitly or uniquely selected project; context is optional."""
+    """Answer about one explicitly or uniquely selected project using an on-the-fly index."""
     question = _last_user_text(state)
 
-    # A user may explicitly point to a context markdown file. Its embedded root wins;
-    # otherwise its parent directory is treated as the project root.
-    explicit_context = _extract_md_path(question)
-    context_text = context_path = None
-    if explicit_context:
-        raw, cleaned = explicit_context
-        candidate = Path(cleaned).expanduser()
-        if candidate.is_file():
-            context_text = candidate.read_text(encoding="utf-8", errors="ignore")
-            context_path = candidate.resolve()
-            project_root = candidate.parent.resolve()
-            question = question.replace(raw, "(file context đã được nạp sẵn)").strip()
-        elif candidate.is_absolute() or "/" in cleaned or "\\" in cleaned:
-            hint = "\nNếu file nằm trên Desktop, thử `...\\OneDrive\\Desktop\\...`." if "desktop" in cleaned.lower() else ""
-            return {"messages": [AIMessage(f"⚠️ Không tìm thấy file: `{cleaned}`\nKiểm tra lại đường dẫn.{hint}", name=QA_NAME)]}
-        else:
-            project_root = None
-    else:
-        project_root = None
+    # A user may explicitly point to a context markdown file; it wins over the auto index.
+    question, context_text, context_path, error = _read_explicit_context(question)
+    if error:
+        return {"messages": [AIMessage(error, name=QA_NAME)]}
 
+    # Its embedded root wins; otherwise its parent directory is treated as the project root.
+    project_root = context_path.parent.resolve() if context_path else None
     if project_root is None:
         try:
             project_root = resolve_project_root(state, question, allow_interrupt=not state.get("_parallel_execution", False))
@@ -1216,15 +1486,8 @@ def qa_node(state) -> dict:
             return {"messages": [AIMessage(f"⚠️ {exc}", name=QA_NAME)]}
 
     if context_text is None:
-        context_text, context_path = load_project_context(project_root)
-    if context_text is None:
-        context_text = (
-            "Chưa có PROJECT_CONTEXT*.md trong thư mục dự án. "
-            "Hãy đọc source code trực tiếp bằng search_project/read_file/read_function; "
-            "không được yêu cầu người dùng tạo context trước."
-        )
-    else:
-        context_text = _compact_project_context(context_text)
+        # Navigation index only: tree, entry points, counts. No file is created or read.
+        context_text = build_mini_map(project_root)
 
     register_builtin_tools()
     tool_registry = get_tool_registry()
@@ -1245,8 +1508,8 @@ def qa_node(state) -> dict:
 
     system_msg = SystemMessage(content=SYSTEM_PROMPT + "\n\n" +
         "PROJECT ROOT ĐANG ĐƯỢC PHÂN TÍCH: " + str(project_root) + "\n"
-        "Chỉ được đọc/tìm kiếm trong project root này. PROJECT_CONTEXT chỉ là tài liệu tham khảo; "
-        "nếu context mâu thuẫn với source code thì source code mới là nguồn đúng. "
+        "Chỉ được đọc/tìm kiếm trong project root này. Chỉ mục dự án là bản đồ điều hướng, "
+        "không phải nội dung code; nếu chỉ mục mâu thuẫn với source code thì source code mới là nguồn đúng. "
         "Không tự chuyển sang project khác."
         + ("\n\n" + "\n\n".join(memory_blocks) if memory_blocks else ""))
 
@@ -1310,9 +1573,9 @@ def qa_node(state) -> dict:
         answer = "Không thể lấy thêm code để trả lời đầy đủ. Dựa trên thông tin hiện có:\n\n" + answer
 
     if context_path:
-        sources = f"📄 Context: `{context_path}`"
+        sources = f"📄 File context bạn chỉ định: `{context_path}`"
     else:
-        sources = "📁 Không có PROJECT_CONTEXT; phân tích trực tiếp source code"
+        sources = "🗂️ Chỉ mục dự án: dựng trực tiếp từ source (không dùng file PROJECT_CONTEXT)"
     sources = f"{sources}\n📂 Project: `{project_root}`"
     if extra_labels:
         sources += f"\ncode bổ sung đã đọc: {', '.join(extra_labels)}"
@@ -1325,102 +1588,609 @@ def qa_node(state) -> dict:
 
 ```
 
-### src/hub/agents/research/controller/decision_engine.py  [FULL]
+### src/hub/agents/research/processors/deduplicate.py  [FULL]
 ```python
-"""Laya adapter. Lazy-loads the local decision model; never calls Gemini."""
 from __future__ import annotations
-import os
-from functools import lru_cache
-from typing import Any
+
+import hashlib
+import re
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
+
+# Minimum body length before a content fingerprint is trusted as a duplicate signal.
+FINGERPRINT_MIN_CHARS = 500
+FINGERPRINT_CHARS = 300
 
 
-ACTIONS = ("FETCH_NEXT", "SEARCH_MORE", "VERIFY_TOP", "STOP")
+def canonical_url(url: str) -> str:
+    parts = urlsplit((url or "").strip())
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if not k.lower().startswith("utm_") and k.lower() not in TRACKING_KEYS]
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/") or "/",
+                       urlencode(query), ""))
 
 
-@lru_cache(maxsize=1)
-def _load_router():
-    # Laya's multilingual router handles Vietnamese. Loading is deferred until research is used.
-    os.environ.setdefault("USE_TF", "0")
-    try:
-        from laya import Router
-    except ImportError as exc:
-        raise RuntimeError("Thiếu Laya. Cài bằng: pip install -e '.[research]'") from exc
-    device = os.getenv("HUB_LAYA_DEVICE") or None
-    return Router(device=device) if device else Router()
+def title_key(title: str) -> set[str]:
+    """Normalised token set of a title, used for same-story similarity."""
+    return set(re.findall(r"[\w]+", (title or "").casefold()))
 
 
-class LayaDecisionEngine:
-    def __init__(self, router=None):
-        self._router = router
-        self.model_name = os.getenv("HUB_LAYA_MODEL", "multilingual")
+def same_story(title: str, other: str, threshold: float = 0.45) -> bool:
+    """True when two headlines describe the same story (token overlap, not exact match)."""
+    left, right = title_key(title), title_key(other)
+    union = left | right
+    return bool(union) and len(left & right) / len(union) >= threshold
 
-    @property
-    def router(self):
-        if self._router is None:
-            self._router = _load_router()
-        return self._router
 
-    def predict(self, state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
-        result = self.router.predict(state, questions, model=self.model_name)
-        return result.get("answers", result)
+def content_fingerprint(text: str) -> str | None:
+    """Hash the opening of an article body to spot syndicated copies.
 
-    def choose_action(self, state: dict[str, Any]) -> tuple[str | None, float | None]:
-        question = {
-            "next_action": {
-                "type": "choice",
-                "instructions": (
-                    "Choose the safest useful next step in a bounded web research workflow. "
-                    "Do not stop while useful unprocessed pages remain, but stop at configured limits."
-                ),
-                "criteria": {
-                    "FETCH_NEXT": "Fetch the next relevant URL already in the pending queue.",
-                    "SEARCH_MORE": "Search another query because coverage is insufficient and search budget remains.",
-                    "VERIFY_TOP": "Search for independent sources corroborating the leading story.",
-                    "STOP": "Stop because enough evidence is collected or the budget is exhausted.",
-                },
-            }
-        }
-        answers = self.predict(state, question)
-        answer = answers.get("next_action", {})
-        if isinstance(answer, str):
-            return answer, None
-        action = answer.get("choice")
-        confidence = answer.get("confidence")
-        try:
-            confidence = float(confidence) if confidence is not None else None
-        except (TypeError, ValueError):
-            confidence = None
-        return action, confidence
+    Only used for bodies long enough to be distinctive; short snippets and
+    pages that failed extraction return ``None`` (caller falls back to domain).
+    """
+    if not text or len(text.strip()) < FINGERPRINT_MIN_CHARS:
+        return None
+    body = re.sub(r"[^\w\s]", "", " ".join(text.split()).casefold())
+    if len(body) < FINGERPRINT_MIN_CHARS:
+        return None
+    return hashlib.sha1(body[:FINGERPRINT_CHARS].encode("utf-8")).hexdigest()[:16]
 
-    def score_articles(self, articles: list[dict[str, Any]]) -> dict[str, float]:
-        """Experimental ordinal scoring; use in shadow/benchmark until domain-validated."""
-        if not articles:
-            return {}
-        state = {"task": "Rank news by importance, relevance, freshness and evidence quality.",
-                 "articles": articles}
-        questions = {}
-        for i, article in enumerate(articles):
-            questions[f"article_{i}"] = {
-                "type": "score",
-                "instructions": (
-                    f"Rate the research value of article {i}: relevance to query, public impact, "
-                    "freshness and evidence quality. Ignore sensational wording."
-                ),
-                "criteria": ["very low", "low", "medium", "high", "very high"],
-            }
-        answers = self.predict(state, questions)
-        scores: dict[str, float] = {}
-        for i, article in enumerate(articles):
-            raw = answers.get(f"article_{i}", {})
-            if isinstance(raw, dict):
-                raw = raw.get("score")
-            try:
-                # Laya score is an ordinal expected level, not a calibrated percentage.
-                value = float(raw)
-                scores[str(article.get("url", i))] = max(0.0, min(100.0, value / 4.0 * 100.0))
-            except (TypeError, ValueError):
+
+def independent_source_count(articles: list) -> int:
+    """Count distinct original sources: one per unique fingerprint, otherwise one per domain."""
+    keys: set[str] = set()
+    for article in articles:
+        if not getattr(article, "content", "").strip():
+            continue
+        fingerprint = getattr(article, "fingerprint", None)
+        keys.add(f"fp:{fingerprint}" if fingerprint else f"host:{getattr(article, 'source', '')}")
+    return len(keys)
+
+
+def independent_domains(articles: list) -> set[str]:
+    return {getattr(article, "source", "") for article in articles if getattr(article, "source", "")}
+
+
+def _host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower().removeprefix("www.")
+
+
+def _path(url: str) -> str:
+    return (urlsplit(url).path or "/").rstrip("/") or "/"
+
+
+def _similarity(left: set[str], right: set[str]) -> float:
+    union = left | right
+    return len(left & right) / len(union) if union else 1.0
+
+
+def deduplicate(rows: list[dict]) -> list[dict]:
+    """Remove duplicate search hits while preserving same-path cross-publisher copies.
+
+    Exact canonical URLs are always removed. Near-identical titles are collapsed
+    within one publisher. Across publishers, retain a matching title only when
+    both publishers point to the same article path (syndicated coverage).
+    """
+    output: list[dict] = []
+    seen_urls: set[str] = set()
+    accepted: list[tuple[str, str, set[str]]] = []
+
+    for row in rows:
+        url = canonical_url(row.get("url", ""))
+        if not url or url in seen_urls:
+            continue
+        host, path = _host(url), _path(url)
+        tokens = title_key(row.get("title", ""))
+        duplicate = False
+        for old_host, old_path, old_tokens in accepted:
+            if _similarity(tokens, old_tokens) < 0.78:
                 continue
-        return scores
+            # Same host: same story copied to another URL. Different hosts:
+            # different paths imply duplicate search noise; same path is retained.
+            if host == old_host or path != old_path:
+                duplicate = True
+                break
+        if duplicate:
+            continue
+        seen_urls.add(url)
+        accepted.append((host, path, tokens))
+        output.append({**row, "url": url})
+    return output
+
+```
+
+### src/hub/agents/research/processors/synthesize.py  [FULL]
+```python
+"""LLM summary + junk filter, with a deterministic extractive fallback.
+
+The summariser receives only text that was actually fetched, so it cannot invent
+facts. It returns at most ``HUB_RESEARCH_TOP_ITEMS`` clean items; duplicate
+stories, clickbait and off-topic pieces are reported as ``dropped`` so the final
+report can say what was filtered out.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass, field
+
+from ....model_router import get_llm
+from ..processors.deduplicate import independent_source_count, independent_domains, same_story
+from ..state import Article
+
+DEFAULT_TOP_ITEMS = 5
+DEFAULT_ARTICLE_CHARS = 1500
+DEFAULT_INPUT_CHARS = 12000
+MIN_CONTENT_CHARS = 200
+_JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
+
+
+@dataclass
+class SummaryItem:
+    url: str
+    headline: str
+    summary: str
+    why: str = ""
+    confidence: str = "medium"          # high | medium | low
+    sources: list[str] = field(default_factory=list)
+    domain: str = ""
+    published_at: str | None = None
+    score: float = 0.0
+    independent: int = 1
+
+
+def _int_env(name: str, default: int, low: int, high: int) -> int:
+    try:
+        return max(low, min(high, int(os.getenv(name, str(default)))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            block if isinstance(block, str) else block.get("text", "")
+            for block in content
+        )
+    return str(content)
+
+
+def first_sentences(text: str, count: int = 2, max_chars: int = 420) -> str:
+    """Take whole sentences only: the old report cut mid-sentence at 450 chars."""
+    clean = " ".join((text or "").split())
+    if not clean:
+        return ""
+    pieces = [piece.strip() for piece in _SENTENCE_SPLIT.split(clean) if piece.strip()]
+    kept: list[str] = []
+    for piece in pieces[:count]:
+        if kept and len(" ".join(kept + [piece])) > max_chars:
+            break
+        kept.append(piece)
+        if len(" ".join(kept)) >= max_chars * 0.8:
+            break
+    summary = " ".join(kept)
+    if len(summary) > max_chars:
+        cut = summary.rfind(" ", 0, max_chars - 1)
+        summary = summary[: cut if cut > 40 else max_chars - 1].rstrip(" ,;:") + " …"
+    elif summary and summary[-1] not in ".!?…":
+        summary += " …"
+    return summary
+
+
+def _select_candidates(articles: list[Article], limit: int) -> list[Article]:
+    """Top distinct stories with usable text, one article per story."""
+    ordered = sorted(articles, key=lambda item: item.final_score, reverse=True)
+    chosen: list[Article] = []
+    for article in ordered:
+        if len((article.content or "").strip()) < MIN_CONTENT_CHARS:
+            continue
+        if any(same_story(article.title, other.title) for other in chosen):
+            continue
+        chosen.append(article)
+        if len(chosen) >= max(1, limit):
+            break
+    return chosen
+
+
+def _enrich(item: SummaryItem, article: Article, cluster: list[Article]) -> SummaryItem:
+    item.url = article.url
+    item.headline = item.headline or article.title
+    item.domain = article.source
+    item.published_at = article.published_at
+    item.score = article.final_score
+    item.sources = sorted(independent_domains(cluster))
+    item.independent = independent_source_count(cluster)
+    if not item.why:
+        item.why = (f"{item.independent} nguồn độc lập" if item.independent >= 2
+                    else "chỉ 1 nguồn, nên kiểm chứng thêm")
+    return item
+
+
+def build_prompt(query: str, articles: list[Article], *, limit: int,
+                 article_chars: int, input_chars: int) -> str:
+    blocks: list[str] = []
+    used = 0
+    for index, article in enumerate(articles, 1):
+        body = " ".join(article.content.split())
+        body = body[:article_chars]
+        block = (
+            f"[{index}] url: {article.url}\n"
+            f"title: {article.title}\n"
+            f"source: {article.source or 'unknown'} | published: {article.published_at or 'unknown'}\n"
+            f"body: {body}\n"
+        )
+        if used + len(block) > input_chars and blocks:
+            break
+        blocks.append(block)
+        used += len(block)
+    return (
+        "Bạn là biên tập viên research. Người dùng hỏi: " + query + "\n\n"
+        "Dưới đây là các bài đã tải về (điểm cao trước). Chọn tối đa "
+        f"{limit} tin sạch nhất và tóm tắt.\n\n"
+        + "\n".join(blocks)
+        + "\nTrả về DUY NHẤT JSON:\n"
+        '{"items": [{"url": "...", "headline": "...", "summary": "...", '
+        '"why": "...", "confidence": "high|medium|low"}], '
+        '"dropped": [{"url": "...", "reason": "duplicate|clickbait|off-topic|thin"}]}\n'
+        "Quy tắc:\n"
+        "- summary 2-3 câu tiếng Việt, chỉ dùng thông tin trong body; nêu số liệu nếu có.\n"
+        "- Không bịa, không thêm bối cảnh ngoài bài, không quảng cáo.\n"
+        "- Loại tin trùng ý nhau, giật tít, PR, hoặc lạc chủ đề.\n"
+        "- url phải đúng như trong danh sách trên.\n"
+        "Chỉ trả JSON."
+    )
+
+
+def _payload(raw: str) -> dict:
+    text = raw.strip()
+    match = _JSON_BLOCK.search(text)
+    if match:
+        text = match.group(1)
+    elif not text.startswith("{"):
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            raise ValueError("no JSON object in summary response")
+        text = text[start:end + 1]
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("summary response is not an object")
+    return data
+
+
+class ArticleSummarizer:
+    def __init__(self, llm_factory=None, enabled: bool | None = None,
+                 top_items: int | None = None):
+        self.llm_factory = llm_factory or get_llm
+        self.enabled = enabled
+        self.top_items = top_items
+
+    def _on(self) -> bool:
+        from ..controller.planner import llm_enabled
+
+        return llm_enabled(self.enabled)
+
+    def summarize(self, query: str, articles: list[Article],
+                  limit: int | None = None) -> tuple[list[SummaryItem], list[dict]]:
+        limit = limit or self.top_items or _int_env(
+            "HUB_RESEARCH_TOP_ITEMS", DEFAULT_TOP_ITEMS, 1, 10)
+        candidates = _select_candidates(articles, limit * 2)
+        if not candidates:
+            return [], []
+        if not self._on():
+            return self._extractive(candidates, limit), []
+        try:
+            prompt = build_prompt(
+                query, candidates, limit=limit,
+                article_chars=_int_env("HUB_RESEARCH_SUMMARY_ARTICLE_CHARS",
+                                       DEFAULT_ARTICLE_CHARS, 400, 6000),
+                input_chars=_int_env("HUB_RESEARCH_SUMMARY_INPUT_CHARS",
+                                     DEFAULT_INPUT_CHARS, 2000, 40000),
+            )
+            llm = self.llm_factory("research")
+            response = llm.invoke(prompt)
+            data = _payload(_text(getattr(response, "content", response)))
+        except Exception:
+            return self._extractive(candidates, limit), []
+
+        by_url = {article.url: article for article in candidates}
+        clusters = self._clusters(candidates)
+        items: list[SummaryItem] = []
+        dropped: list[dict] = []
+        seen_urls: set[str] = set()
+        for raw in data.get("items") or []:
+            if not isinstance(raw, dict):
+                continue
+            url = str(raw.get("url") or "").strip()
+            article = by_url.get(url)
+            if article is None:
+                dropped.append({"url": url[:300], "reason": "unknown-url"})
+                continue
+            if url in seen_urls:
+                dropped.append({"url": url, "reason": "duplicate"})
+                continue
+            summary = " ".join(str(raw.get("summary") or "").split())
+            if len(summary) < 40:
+                dropped.append({"url": url, "reason": "thin"})
+                continue
+            seen_urls.add(url)
+            headline = " ".join(str(raw.get("headline") or article.title).split())[:160]
+            confidence = str(raw.get("confidence") or "").lower()
+            item = SummaryItem(
+                url=url, headline=headline, summary=summary[:800],
+                why=" ".join(str(raw.get("why") or "").split())[:200],
+                confidence=confidence if confidence in {"high", "medium", "low"} else "medium",
+            )
+            items.append(_enrich(item, article, clusters.get(url, [article])))
+            if len(items) >= limit:
+                break
+        for raw in data.get("dropped") or []:
+            if isinstance(raw, dict) and raw.get("url"):
+                dropped.append({"url": str(raw["url"])[:300],
+                                "reason": str(raw.get("reason") or "filtered")[:40]})
+        if not items:
+            return self._extractive(candidates, limit), dropped
+        return items, dropped
+
+    @staticmethod
+    def _clusters(articles: list[Article]) -> dict[str, list[Article]]:
+        clusters: list[list[Article]] = []
+        for article in articles:
+            for cluster in clusters:
+                if same_story(article.title, cluster[0].title):
+                    cluster.append(article)
+                    break
+            else:
+                clusters.append([article])
+        return {article.url: cluster for cluster in clusters for article in cluster}
+
+    def _extractive(self, articles: list[Article], limit: int) -> list[SummaryItem]:
+        clusters = self._clusters(articles)
+        items: list[SummaryItem] = []
+        for article in articles[:limit]:
+            cluster = clusters.get(article.url, [article])
+            sources = independent_source_count(cluster)
+            confidence = "high" if sources >= 3 else "medium" if sources >= 2 else "low"
+            item = SummaryItem(
+                url=article.url, headline=article.title,
+                summary=first_sentences(article.content, count=2),
+                confidence=confidence,
+            )
+            items.append(_enrich(item, article, cluster))
+        return items
+
+```
+
+### src/hub/mini_map.py  [FULL]
+```python
+"""On-the-fly project index for the QA agent.
+
+The map is a navigation aid only: directory tree with file counts, entry points and
+project scripts. It never contains source code, never reads/creates
+``PROJECT_CONTEXT*.md`` and writes nothing to disk. Details are read on demand by the
+QA tools (``search_project`` / ``read_file`` / ``read_function``).
+
+Budget: the rendered text is capped (default 3000 chars, ``HUB_QA_MINIMAP_CHARS``).
+When the cap is reached the least important branches are dropped first, so tests/,
+docs/ and examples/ disappear before src/.
+"""
+from __future__ import annotations
+
+import fnmatch
+import json
+import os
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .project_files import iter_project_files
+
+DEFAULT_MAX_CHARS = 3000
+MIN_MAX_CHARS = 500
+MAX_MAX_CHARS = 20000
+MAX_DEPTH = 4            # directory levels rendered below the project root
+MAX_FILES_SCAN = 5000    # stop the walk here so huge repos stay cheap
+MAX_ENTRIES = 160        # hard cap of rendered lines
+MAX_ENTRY_POINTS = 8
+INLINE_FILES = 6         # small dirs list their file names inline
+
+ENTRY_NAMES = {"main.py", "cli.py", "app.py", "run.py", "__main__.py",
+               "manage.py", "wsgi.py", "asgi.py", "server.py", "index.js", "index.ts"}
+
+# Directory importance: lower bucket renders first, so it survives truncation.
+_HIGH_DIRS = {"src", "app", "lib", "pkg", "packages", "core", "agents", "hub",
+              "backend", "frontend", "server", "api", "cmd", "internal"}
+_LOW_DIRS = {"tests", "test", "docs", "doc", "examples", "example", "samples",
+             "benchmarks", "fixtures", "migrations", "assets", "static", "public",
+             "vendor", "third_party", "scripts"}
+
+# Only names are filtered (contents are never read by this module).
+_SECRET_PATTERNS = (".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.jks",
+                    "*.keystore", "id_rsa*", "id_dsa*", "id_ecdsa*", "id_ed25519*",
+                    ".netrc", ".npmrc", ".pypirc", ".htpasswd", "credentials*",
+                    "*credentials*.json", "secrets*", "secret.*", "*secret*",
+                    "service-account*.json", "service_account*.json", "token.json",
+                    "*.kdbx", "*.tfvars", "*.tfstate")
+# Generated metadata that is never useful for navigation.
+_NOISE_DIR_SUFFIXES = (".egg-info", ".dist-info", ".ipynb_checkpoints")
+_NOISE_DIR_NAMES = {"__pycache__", "node_modules", "site-packages"}
+
+
+@dataclass
+class _Dir:
+    files: list[str] = field(default_factory=list)
+    dirs: dict[str, "_Dir"] = field(default_factory=dict)
+    total: int = 0
+
+
+def _budget(max_chars: int | None) -> int:
+    if max_chars is None:
+        try:
+            max_chars = int(os.getenv("HUB_QA_MINIMAP_CHARS", str(DEFAULT_MAX_CHARS)))
+        except (TypeError, ValueError):
+            max_chars = DEFAULT_MAX_CHARS
+    return max(MIN_MAX_CHARS, min(MAX_MAX_CHARS, int(max_chars)))
+
+
+def _is_noise(name: str) -> bool:
+    folded = name.casefold()
+    if folded.startswith("."):
+        return True
+    return any(fnmatch.fnmatchcase(folded, pattern) for pattern in _SECRET_PATTERNS)
+
+
+def _bucket(name: str) -> int:
+    folded = name.casefold()
+    if folded in _HIGH_DIRS:
+        return 0
+    if folded in _LOW_DIRS:
+        return 2
+    return 1
+
+
+def _scan(root: Path) -> tuple[list[str], bool]:
+    """Return non-ignored, non-secret relative paths plus a "scan capped" flag."""
+    paths: list[str] = []
+    for path in iter_project_files(root, max_files=MAX_FILES_SCAN):
+        try:
+            rel = path.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        if _is_noise(path.name):
+            continue
+        if any(part.endswith(_NOISE_DIR_SUFFIXES) or part in _NOISE_DIR_NAMES
+               for part in Path(rel).parts[:-1]):
+            continue
+        paths.append(rel)
+    return paths, len(paths) >= MAX_FILES_SCAN
+
+
+def _build_tree(paths: list[str]) -> _Dir:
+    root = _Dir()
+    for rel in paths:
+        parts = rel.split("/")
+        node = root
+        for part in parts[:-1]:
+            node = node.dirs.setdefault(part, _Dir())
+        node.files.append(parts[-1])
+    _count(root)
+    return root
+
+
+def _count(node: _Dir) -> int:
+    node.total = len(node.files) + sum(_count(child) for child in node.dirs.values())
+    return node.total
+
+
+def _pyproject_scripts(root: Path) -> list[str]:
+    try:
+        data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    scripts = data.get("project", {}).get("scripts") or {}
+    return [f"{name} = {target}" for name, target in list(scripts.items())[:4]]
+
+
+def _package_entry(root: Path) -> list[str]:
+    try:
+        data = json.loads((root / "package.json").read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    found = []
+    if isinstance(data.get("main"), str):
+        found.append(f"main = {data['main']}")
+    scripts = data.get("scripts")
+    if isinstance(scripts, dict) and isinstance(scripts.get("start"), str):
+        found.append(f"start = {scripts['start']}")
+    return found[:2]
+
+
+def _entry_points(paths: list[str], root: Path) -> list[str]:
+    named = [rel for rel in paths if Path(rel).name in ENTRY_NAMES]
+    named.sort(key=lambda rel: (rel.count("/"), rel.casefold()))
+    entries = named[:MAX_ENTRY_POINTS]
+    entries += _pyproject_scripts(root)
+    entries += _package_entry(root)
+    return entries
+
+
+def _dir_lines(node: _Dir, depth: int, prefix: str) -> list[str]:
+    if depth > MAX_DEPTH:
+        return []
+    children = sorted(
+        node.dirs.items(),
+        key=lambda item: (_bucket(item[0]), -item[1].total, item[0].casefold()),
+    )
+    lines: list[str] = []
+    for name, child in children:
+        indent = "  " * (depth - 1)
+        rel = f"{prefix}{name}/"
+        label = f"{indent}{rel} ({child.total} file)"
+        if child.total <= INLINE_FILES and not child.dirs and child.files:
+            names = ", ".join(sorted(child.files, key=str.casefold))
+            label = f"{indent}{rel} ({child.total} file: {names})"
+        lines.append(label)
+        lines.extend(_dir_lines(child, depth + 1, f"{rel}"))
+    return lines
+
+
+def build_mini_map(root: str | Path, max_chars: int | None = None) -> str:
+    """Render a compact, always-current index of ``root``. Never touches the disk."""
+    base = Path(root).resolve()
+    budget = _budget(max_chars)
+    try:
+        paths, capped = _scan(base)
+    except OSError as exc:
+        return f"Dự án: {base.name}\nKhông quét được thư mục: {type(exc).__name__}: {exc}"
+
+    if not paths:
+        return f"Dự án: {base.name}\n(chưa thấy file source nào; hãy kiểm tra đường dẫn dự án)"
+
+    tree = _build_tree(paths)
+    entries = _entry_points(paths, base)
+    root_files = sorted(
+        (name for name in tree.files if not _is_noise(name)),
+        key=str.casefold,
+    )
+
+    header = f"Dự án: {base.name} — {len(paths)} file" + (" (đã chạm giới hạn quét)" if capped else "")
+    body: list[str] = []
+    if entries:
+        body.append("Entry points:")
+        body += [f"- {entry}" for entry in entries]
+    if root_files:
+        shown = ", ".join(root_files[:8])
+        more = f", … +{len(root_files) - 8}" if len(root_files) > 8 else ""
+        body.append(f"Tệp ở gốc: {shown}{more}")
+    tree_lines = _dir_lines(tree, 1, "")
+    if tree_lines:
+        body.append("Cây thư mục:")
+        body += tree_lines
+
+    hint = ("Ghi chú: đây chỉ là chỉ mục điều hướng, không chứa nội dung code. "
+            "Đọc chi tiết bằng search_project/read_file/read_function.")
+
+    # Fit into the budget: keep the most important lines first, drop the tail.
+    kept: list[str] = []
+    dropped = 0
+    reserve = len(hint) + len("\n... +999 mục khác")
+    used = len(header)
+    for index, line in enumerate(body):
+        if len(kept) >= MAX_ENTRIES or used + len(line) + 1 + reserve > budget:
+            dropped = len(body) - index
+            break
+        kept.append(line)
+        used += len(line) + 1
+
+    out = [header, *kept]
+    if dropped:
+        out.append(f"... +{dropped} mục khác")
+    out.append(hint)
+    return "\n".join(out)
 
 ```
 
@@ -1643,80 +2413,6 @@ def main():
     print(f'File: {output_path}')
     print(f'Dung lượng: {len(context):,} ký tự')
 if __name__ == '__main__':
-    main()
-
-```
-
-### scripts/benchmark_laya_research.py  [FULL]
-```python
-"""Evaluate Laya on a hand-labelled research decision JSONL dataset.
-
-Each line is one of:
-  {"kind":"action", "state": {...}, "expected":"FETCH_NEXT"}
-  {"kind":"article_score", "article": {"url":"...", "title":"...", "content":"..."}, "expected": 0..4}
-
-Do not switch HUB_RESEARCH_LAYA_MODE=active until this benchmark is representative
-and the model beats a simple majority/mean baseline on a held-out split.
-"""
-from __future__ import annotations
-import argparse
-import json
-from pathlib import Path
-from statistics import mean
-
-from hub.agents.research.controller.decision_engine import LayaDecisionEngine
-
-QUESTIONS = {
-    "next_action": {
-        "type": "choice",
-        "instructions": "Choose the safest useful next action for the current research state.",
-        "criteria": {
-            "FETCH_NEXT": "Fetch the next relevant URL already queued.",
-            "SEARCH_MORE": "Search more because coverage is insufficient and budget remains.",
-            "VERIFY_TOP": "Seek independent corroboration for the leading result.",
-            "STOP": "Stop because evidence is sufficient or limits are reached.",
-        },
-    }
-}
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset", type=Path, help="Hand-labelled JSONL file")
-    args = parser.parse_args()
-    engine = LayaDecisionEngine()
-    action_total = action_correct = 0
-    score_errors = []
-    score_pairs = []
-    for line_no, line in enumerate(args.dataset.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        row = json.loads(line)
-        if row["kind"] == "action":
-            predicted, _ = engine.choose_action(row["state"])
-            action_total += 1
-            action_correct += int(predicted == row["expected"])
-        elif row["kind"] == "article_score":
-            article = row["article"]
-            scores = engine.score_articles([article])
-            predicted_100 = scores.get(str(article.get("url", 0)))
-            if predicted_100 is not None:
-                predicted = predicted_100 / 25.0
-                expected = float(row["expected"])
-                score_errors.append(abs(predicted - expected))
-                score_pairs.append((predicted, expected))
-        else:
-            raise ValueError(f"Unknown kind at line {line_no}: {row['kind']}")
-    print(f"Action accuracy: {action_correct}/{action_total} = "
-          f"{action_correct / action_total:.3f}" if action_total else "Action accuracy: no action rows")
-    print(f"Article score MAE: {mean(score_errors):.3f} over {len(score_errors)} rows"
-          if score_errors else "Article score MAE: no score rows")
-    if action_total:
-        print("Action majority baseline must be calculated from the labelled dataset before comparing.")
-    print("Do not use confidence as a correctness guarantee; inspect per-class errors and held-out data.")
-
-
-if __name__ == "__main__":
     main()
 
 ```
@@ -3419,8 +4115,221 @@ def build_context(root: str, mode: str = DEFAULT_MODE, budget: int | None = ...,
 ```python
 from ..base import AgentSpec
 from .node import qa_node
-SPEC = AgentSpec(name='qa', description='Project QA Agent: Chuyên trả lời câu hỏi và giải thích source code của dự án dựa trên source code của project đã chọn; PROJECT_CONTEXT*.md chỉ là tài liệu tham khảo tùy chọn. Sử dụng Gemini để phân tích kiến trúc, class, function, module, luồng xử lý và mối quan hệ giữa các thành phần. Khi context chưa đủ thông tin, Agent có thể đọc thêm file source code hoặc function cụ thể để tìm câu trả lời chính xác hơn. Sử dụng khi người dùng đặt câu hỏi, muốn giải thích, phân tích hoặc tìm hiểu code trong một dự án đã chọn, kể cả khi chưa có context.', node=qa_node, parallel_safe=True)
+SPEC = AgentSpec(name='qa', description='Project QA Agent: trả lời câu hỏi và giải thích source code của dự án đã chọn. Hệ thống dựng chỉ mục dự án (cây thư mục + entry points) tại chỗ, không cần file PROJECT_CONTEXT. Sử dụng Gemini để phân tích kiến trúc, class, function, module, luồng xử lý và mối quan hệ giữa các thành phần. Khi chỉ mục chưa đủ thông tin, Agent tự đọc thêm file source code hoặc function cụ thể để trả lời chính xác. Sử dụng khi người dùng đặt câu hỏi, muốn giải thích, phân tích hoặc tìm hiểu code trong một dự án đã chọn.', node=qa_node, parallel_safe=True)
 __all__ = ['SPEC']
+
+```
+
+### src/hub/agents/qa/history.py  [FULL]
+```python
+"""Conversation memory for the QA agent: one budget, three layers.
+
+A. **Verbatim** — the newest ``HUB_QA_VERBATIM_TURNS`` turns, kept in full (with a per-answer
+   safety cap) so follow-ups like "cái đó", "mục 2", "sửa tiếp" still point at real text.
+B. **Digest** — older turns reduced deterministically to a question line plus the informative
+   lines (paths, ``file:dòng`` citations, numbers, bullets). No LLM call, so it is free and
+   stable in tests.
+C. **Durable memory** — facts that must survive many turns or a restart belong in
+   ``<project>/.hub/project_memory.md`` (read by QA) or ``~/.agent-hub/user_memory.md``,
+   not in the rolling window.
+
+Every layer shares ``HUB_QA_HISTORY_CHARS`` (default 8000 chars); turns are added
+newest-first until the budget is spent, and the transcript never ends mid-line.
+"""
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass, field
+
+from langchain_core.messages import HumanMessage
+
+QA_NAME = "qa"
+
+DEFAULT_TOTAL_CHARS = 8000
+DEFAULT_MAX_TURNS = 12
+DEFAULT_VERBATIM_TURNS = 2
+DEFAULT_VERBATIM_CHARS = 2500      # per answer in the verbatim window
+DEFAULT_DIGEST_CHARS = 320         # per answer in the digest window
+DEFAULT_QUESTION_CHARS = 240
+
+_HEADER_RESERVE = 220              # header + footer + separators
+_CODE_FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
+_FOOTER = "\n\n---\n"
+_INFORMATIVE = re.compile(
+    r"`[^`]+`"                                      # inline code / path
+    r"|\b[\w./\\-]+\.(?:py|js|ts|tsx|jsx|go|rs|java|kt|cs|rb|php|md|toml|json|ya?ml)\b"
+    r"|:L\d+"                                       # file:L12 citations
+    r"|\b\d{2,}\b"                                  # numbers that matter
+)
+
+
+@dataclass
+class Turn:
+    question: str
+    answers: list[tuple[str, str]] = field(default_factory=list)
+
+
+def _int_env(name: str, default: int, low: int, high: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(low, min(high, value))
+
+
+def _clip(text: str, limit: int) -> str:
+    """Cut at a word boundary so a line never ends in the middle of a word."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text.rfind(" ", 0, max(1, limit - 1))
+    return text[: cut if cut > limit // 2 else max(1, limit - 1)].rstrip(" ,;:") + " …"
+
+
+def _clip_keep(text: str, limit: int) -> str:
+    """Trim at a line (then word) boundary, keeping the original line structure."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text.rfind("\n", 0, limit)
+    if cut < limit // 2:
+        cut = text.rfind(" ", 0, limit)
+    if cut < limit // 2:
+        cut = limit
+    return text[:cut].rstrip() + "\n…(cắt bớt)"
+
+
+def _strip_footer(text: str) -> str:
+    """Drop the "---\\n📂 Project: …" block QA appends to every answer."""
+    return text.split(_FOOTER, 1)[0]
+
+
+def _squeeze_code(text: str) -> str:
+    """Replace code blocks with a size marker: the digest needs facts, not source."""
+    def repl(match: re.Match) -> str:
+        lines = [line for line in match.group(1).splitlines() if line.strip()]
+        if len(lines) <= 2:
+            return " " + " ".join(line.strip() for line in lines) + " "
+        return f" [code {len(lines)} dòng] "
+
+    return _CODE_FENCE.sub(repl, text)
+
+
+def _informative(line: str) -> bool:
+    return bool(_INFORMATIVE.search(line))
+
+
+def digest_answer(text: str, limit: int = DEFAULT_DIGEST_CHARS) -> str:
+    """Extractive summary: keep the lead sentence and the lines carrying facts."""
+    body = _squeeze_code(_strip_footer(text))
+    lines = [" ".join(line.split()) for line in body.splitlines()]
+    lines = [line.lstrip("#>*- ").strip() for line in lines if line.strip()]
+    if not lines:
+        return ""
+    picked: list[str] = []
+    budget = limit
+    for index, line in enumerate(lines):
+        if index == 0 or _informative(line):
+            piece = _clip(line, max(40, budget))
+            if not piece or piece in picked:
+                continue
+            picked.append(piece)
+            budget -= len(piece) + 3
+            if budget <= 40:
+                break
+    return _clip(" | ".join(picked), limit)
+
+
+def _label(message) -> str:
+    name = getattr(message, "name", None)
+    return str(name).lower() if name else "hub"
+
+
+def _turns(messages: list) -> list[Turn]:
+    """Group messages into (human question, [agent answers]) turns; skip the open question."""
+    turns: list[Turn] = []
+    current: Turn | None = None
+    for message in messages:
+        kind = getattr(message, "type", "")
+        content = getattr(message, "content", "")
+        if not isinstance(content, str):
+            content = str(content)
+        if kind == "human":
+            current = Turn(question=content)
+            turns.append(current)
+        elif kind == "ai" and current is not None and hasattr(message, "name"):
+            current.answers.append((_label(message), content))
+    if turns and not turns[-1].answers:
+        turns.pop()          # the question being answered right now
+    return turns
+
+
+def _render_turn(turn: Turn, *, verbatim: bool, question_chars: int,
+                 answer_chars: int, digest_chars: int) -> str:
+    parts = [f"Q: {_clip_keep(turn.question, question_chars)}"]
+    for name, text in turn.answers:
+        body = _strip_footer(text)
+        body = _clip_keep(body, answer_chars) if verbatim else digest_answer(body, digest_chars)
+        if body:
+            parts.append(f"[{name}] {body}")
+    return "\n".join(parts)
+
+
+def render_history(state: dict, max_turns: int | None = None,
+                   total_chars: int | None = None) -> str:
+    """Build the history block for the QA prompt. Empty string when there is no past turn."""
+    turns = _turns(list(state.get("messages", [])))
+    if not turns:
+        return ""
+
+    total = total_chars if total_chars is not None else _int_env(
+        "HUB_QA_HISTORY_CHARS", DEFAULT_TOTAL_CHARS, 1500, 30000)
+    limit_turns = max_turns if max_turns is not None else _int_env(
+        "HUB_QA_HISTORY_TURNS", DEFAULT_MAX_TURNS, 1, 60)
+    verbatim_turns = _int_env("HUB_QA_VERBATIM_TURNS", DEFAULT_VERBATIM_TURNS, 0, 10)
+    verbatim_chars = _int_env("HUB_QA_VERBATIM_CHARS", DEFAULT_VERBATIM_CHARS, 300, 6000)
+    digest_chars = _int_env("HUB_QA_DIGEST_CHARS", DEFAULT_DIGEST_CHARS, 120, 1200)
+    question_chars = _int_env("HUB_QA_QUESTION_CHARS", DEFAULT_QUESTION_CHARS, 60, 2000)
+
+    if limit_turns <= 0:
+        return ""
+
+    budget = max(400, total - _HEADER_RESERVE)
+    # Keep the verbatim window from eating the whole budget: at most ~60% split across it,
+    # so the digest window still has room for the older turns.
+    verbatim_cap = min(verbatim_chars, max(400, int(budget * 0.6 // max(1, verbatim_turns))))
+    kept: list[str] = []
+    for index, turn in enumerate(reversed(turns[-limit_turns:])):
+        verbatim = index < verbatim_turns
+        block = _render_turn(
+            turn, verbatim=verbatim, question_chars=question_chars,
+            answer_chars=verbatim_cap, digest_chars=digest_chars,
+        )
+        if len(block) + 2 > budget:                      # does not fit: try the compact form
+            if verbatim:
+                block = _render_turn(
+                    turn, verbatim=False, question_chars=question_chars,
+                    answer_chars=verbatim_cap, digest_chars=digest_chars,
+                )
+            if len(block) + 2 > budget:
+                break
+        kept.append(block)
+        budget -= len(block) + 2
+
+    kept.reverse()
+    older = len(turns) - len(kept)
+    header = f"--- LỊCH SỬ HỘI THOẠI ({len(kept)} lượt gần nhất"
+    header += f"; {older} lượt cũ hơn đã lược bớt) ---" if older else ") ---"
+    hint = ('Dùng để hiểu các từ như "cái đó", "file kia", "làm tiếp". '
+            "Lượt cũ được rút gọn; source code vừa đọc luôn đúng hơn lịch sử.")
+    return "\n".join([header, hint, *kept, "--- HẾT LỊCH SỬ ---"])
+
+
+def history_messages(state: dict, max_turns: int | None = None) -> list:
+    """History as prompt messages (empty list when there is nothing to add)."""
+    block = render_history(state, max_turns=max_turns)
+    return [HumanMessage(content=block)] if block else []
 
 ```
 
@@ -3653,7 +4562,11 @@ def resolve_project_root(state: dict, question: str, *, allow_interrupt: bool = 
 
 
 def load_project_context(project_root: str | Path) -> tuple[str | None, Path | None]:
-    """Load the newest context file directly inside the selected project root only."""
+    """Load the newest context file directly inside the selected project root only.
+
+    No longer called automatically by QA (which builds an on-the-fly index instead).
+    Kept for callers that deliberately want a PROJECT_CONTEXT*.md file.
+    """
     root = Path(project_root).resolve()
     try:
         files = sorted(
@@ -3904,7 +4817,9 @@ def read_function(project_root: str, rel_path: str, func_name: str) -> str | Non
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
+import re
 import socket
 import time
 from datetime import datetime, timezone
@@ -4121,6 +5036,115 @@ def extract_text(html: str) -> str:
     return "\n".join(s.strip() for s in soup.get_text("\n").splitlines() if s.strip())
 
 
+_DATE_META = re.compile(
+    r"<meta[^>]+(?:property|name|itemprop)=[\"']"
+    r"(?:article:published_time|og:article:published_time|datePublished|datepublished|"
+    r"publish-date|pubdate|date)[\"'][^>]*content=[\"']([^\"']+)[\"']",
+    re.IGNORECASE,
+)
+_DATE_META_REVERSED = re.compile(
+    r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+(?:property|name|itemprop)=[\"']"
+    r"(?:article:published_time|og:article:published_time|datePublished|datepublished|"
+    r"publish-date|pubdate|date)[\"']",
+    re.IGNORECASE,
+)
+_JSONLD = re.compile(
+    r"<script[^>]+application/ld\+json[^>]*>(.*?)</script>", re.IGNORECASE | re.DOTALL
+)
+
+
+def _normalize_date(value: str | None) -> str | None:
+    """Return an ISO-8601 string for a publisher date, or None when unusable."""
+    if not value:
+        return None
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+        return parsed.isoformat()
+    except ValueError:
+        pass
+    for pattern in ("%Y/%m/%d %H:%M:%S", "%Y/%m/%d", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, pattern).isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _jsonld_dates(node) -> list[str]:
+    found: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in {"datePublished", "dateCreated", "uploadDate"} and isinstance(value, str):
+                found.append(value)
+            else:
+                found.extend(_jsonld_dates(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_jsonld_dates(item))
+    return found
+
+
+def extract_published(html: str) -> str | None:
+    """Extract the publication date from JSON-LD, meta tags, then Trafilatura."""
+    for block in _JSONLD.findall(html or ""):
+        try:
+            found = _jsonld_dates(json.loads(block.strip()))
+        except (ValueError, TypeError):
+            continue
+        for value in found:
+            normalized = _normalize_date(value)
+            if normalized:
+                return normalized
+
+    for pattern in (_DATE_META, _DATE_META_REVERSED):
+        for value in pattern.findall(html or ""):
+            normalized = _normalize_date(value)
+            if normalized:
+                return normalized
+
+    try:
+        import trafilatura
+
+        metadata = trafilatura.extract_metadata(html or "")
+        normalized = _normalize_date(getattr(metadata, "date", None))
+        if normalized:
+            return normalized
+    except Exception:
+        pass
+    return None
+
+
+def fetch_article_meta(url: str) -> tuple[str, str, str | None]:
+    """Fetch one article: text, final URL and publication date (when published)."""
+    html, final_url = fetch_html(url)
+    published = extract_published(html)
+    text = extract_text(html)
+    if len(text) >= 200 or os.getenv("HUB_RESEARCH_BROWSER_FALLBACK", "true").lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        return text, final_url, published
+
+    # Use a real browser only for a successful but JS-rendered/thin page.
+    # If Playwright is unavailable or rendering fails, preserve the HTTP result
+    # so the pipeline can still use the search snippet.
+    try:
+        browser_text, browser_url = _fetch_with_browser(final_url)
+        return browser_text, browser_url, published
+    except FetchError as exc:
+        if exc.category in {"access_denied", "rate_limited", "access_challenge"}:
+            raise
+        return text, final_url, published
+    except Exception:
+        return text, final_url, published
+
+
+def fetch_article(url: str) -> tuple[str, str]:
+    """Backward-compatible wrapper: text and final URL only."""
+    text, final_url, _published = fetch_article_meta(url)
+    return text, final_url
+
+
 def _fetch_with_browser(url: str, timeout: int = 15) -> tuple[str, str]:
     """Render a public JS page; this is not a CAPTCHA or access-control bypass."""
     try:
@@ -4164,200 +5188,593 @@ def _fetch_with_browser(url: str, timeout: int = 15) -> tuple[str, str]:
         finally:
             browser.close()
 
+```
 
-def fetch_article(url: str) -> tuple[str, str]:
-    html, final_url = fetch_html(url)
-    text = extract_text(html)
-    if len(text) >= 200 or os.getenv("HUB_RESEARCH_BROWSER_FALLBACK", "true").lower() not in {
-        "1", "true", "yes", "on"
-    }:
-        return text, final_url
+### src/hub/agents/research/collectors/search.py  [FULL]
+```python
+"""Web search with two interchangeable backends.
 
-    # Use a real browser only for a successful but JS-rendered/thin page.
-    # If Playwright is unavailable or rendering fails, preserve the HTTP result
-    # so the pipeline can still use the search snippet.
+* ``ddgs`` — DuckDuckGo news + text (the original backend).
+* ``rss``  — Google News RSS, free and much better for Vietnamese headlines.
+
+The backends are merged and de-duplicated by canonical URL and by normalised
+title, so the caller sees one ranked list of candidates regardless of source.
+If one backend fails (blocked, rate limited, malformed feed) the other still
+returns results and the error is recorded in ``errors``.
+"""
+from __future__ import annotations
+
+import os
+import re
+import unicodedata
+from email.utils import parsedate_to_datetime
+from urllib.parse import urlencode
+
+from ..processors.deduplicate import canonical_url
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+RSS_URL = "https://news.google.com/rss/search"
+_TAG = re.compile(r"<[^>]+>")
+_SPACES = re.compile(r"\s+")
+
+
+def _normalize_title(title: str) -> str:
+    folded = unicodedata.normalize("NFD", title or "")
+    folded = "".join(ch for ch in folded if unicodedata.category(ch) != "Mn")
+    return " ".join(re.findall(r"[\w]+", folded.casefold()))
+
+
+def _clean_text(value: str) -> str:
+    from html import unescape
+
+    return _SPACES.sub(" ", unescape(_TAG.sub(" ", value or ""))).strip()
+
+
+def _fetch_rss(url: str, params: dict) -> bytes:
     try:
-        browser_text, browser_url = _fetch_with_browser(final_url)
-        return browser_text, browser_url
-    except FetchError as exc:
-        if exc.category in {"access_denied", "rate_limited", "access_challenge"}:
-            raise
-        return text, final_url
-    except Exception:
-        return text, final_url
+        import requests
+    except ImportError as exc:
+        raise RuntimeError("Thiếu requests. Cài bằng: pip install -e '.[research]'") from exc
+    response = requests.get(f"{url}?{urlencode(params)}", headers={"User-Agent": USER_AGENT},
+                            timeout=10)
+    response.raise_for_status()
+    return response.content
+
+
+def _parse_rss(payload: bytes | str) -> list[dict]:
+    """Parse a Google News RSS document into search rows (bounded, no network)."""
+    import xml.etree.ElementTree as ET
+
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError as exc:
+        raise ValueError(f"RSS không hợp lệ: {exc}") from exc
+
+    rows: list[dict] = []
+    for item in root.iter("item"):
+        link = (item.findtext("link") or "").strip()
+        title = _clean_text(item.findtext("title") or "")
+        if not link or not title:
+            continue
+        source_name = (item.findtext("source") or "").strip()
+        source_url = ""
+        for child in item:
+            if child.tag == "source":
+                source_url = child.attrib.get("url", "")
+                break
+        # Google News appends " - Publisher" to every headline.
+        if source_name and title.endswith(f" - {source_name}"):
+            title = title[: -(len(source_name) + 3)].rstrip()
+
+        published = None
+        raw_date = (item.findtext("pubDate") or "").strip()
+        if raw_date:
+            try:
+                published = parsedate_to_datetime(raw_date).isoformat()
+            except (TypeError, ValueError, OverflowError):
+                published = None
+
+        rows.append({
+            "url": link,
+            "title": title,
+            "snippet": _clean_text(item.findtext("description") or "")[:500],
+            "published_at": published,
+            "publisher_url": source_url,
+            "backend": "rss",
+        })
+    return rows
+
+
+def _merge(rows: list[dict]) -> list[dict]:
+    """De-duplicate across backends by canonical URL, then by normalised title."""
+    output: list[dict] = []
+    seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
+    for row in rows:
+        url = canonical_url(row.get("url", ""))
+        title = _normalize_title(row.get("title", ""))
+        if not url or not title:
+            continue
+        if url in seen_urls or title in seen_titles:
+            continue
+        seen_urls.add(url)
+        seen_titles.add(title)
+        output.append({**row, "url": url})
+    return output
+
+
+class WebSearchClient:
+    def __init__(self, max_results: int = 12, backends: list[str] | None = None,
+                 region: str | None = None, rss_fetcher=None):
+        configured = backends if backends is not None else [
+            part.strip().lower()
+            for part in os.getenv("HUB_RESEARCH_SEARCH_BACKENDS", "ddgs,rss").split(",")
+            if part.strip()
+        ]
+        self.backends = [name for name in configured if name in {"ddgs", "rss"}] or ["ddgs"]
+        self.max_results = max_results
+        self.region = region or os.getenv("HUB_RESEARCH_REGION", "wt-wt")
+        self.rss_fetcher = rss_fetcher or _fetch_rss
+        self.errors: list[str] = []
+
+    # -- backends ---------------------------------------------------------
+    def _search_ddgs(self, query: str) -> list[dict]:
+        try:
+            from ddgs import DDGS
+            from ddgs.exceptions import DDGSException
+        except ImportError as exc:
+            raise RuntimeError("Thiếu ddgs. Cài bằng: pip install -e '.[research]'") from exc
+
+        rows: list[dict] = []
+        with DDGS() as client:
+            for kind in ("news", "text"):
+                if len(rows) >= 5:
+                    break
+                try:
+                    rows += list(getattr(client, kind)(
+                        query, region=self.region, max_results=self.max_results) or [])
+                except DDGSException:
+                    continue
+        results = []
+        for row in rows:
+            url = row.get("href") or row.get("url")
+            if not url:
+                continue
+            results.append({
+                "url": url,
+                "title": row.get("title") or url,
+                "snippet": row.get("body") or row.get("snippet") or "",
+                "published_at": row.get("date") or row.get("published") or None,
+                "backend": "ddgs",
+            })
+        return results
+
+    def _search_rss(self, query: str) -> list[dict]:
+        params = {
+            "q": query,
+            "hl": os.getenv("HUB_RESEARCH_RSS_HL", "vi"),
+            "gl": os.getenv("HUB_RESEARCH_RSS_GL", "VN"),
+            "ceid": os.getenv("HUB_RESEARCH_RSS_CEID", "VN:vi"),
+        }
+        return _parse_rss(self.rss_fetcher(RSS_URL, params))
+
+    # -- public -----------------------------------------------------------
+    def search(self, query: str) -> list[dict]:
+        self.errors = []
+        rows: list[dict] = []
+        for backend in self.backends:
+            try:
+                rows += (self._search_ddgs if backend == "ddgs" else self._search_rss)(query)
+            except Exception as exc:
+                self.errors.append(f"Search backend {backend} lỗi: {type(exc).__name__}: {exc}")
+        return _merge(rows)[: self.max_results]
 
 ```
 
 ### src/hub/agents/research/controller/pipeline.py  [FULL]
 ```python
+"""Research pipeline: LLM plan → search → select → fetch → rank → stop → summarize.
+
+The LLM is used exactly twice per run (plan and summary). Every loop decision
+between them is deterministic and bounded by explicit budgets, so a bad plan or
+a flaky network can only make research narrower — never endless or expensive.
+"""
 from __future__ import annotations
+
 import os
+import time
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
+from ..collectors.fetch import fetch_article_meta
 from ..collectors.search import WebSearchClient
-from ..collectors.fetch import fetch_article
-from ..processors.deduplicate import deduplicate, title_key
-from ..ranking.engine import rank_articles
+from ..processors.deduplicate import (
+    canonical_url,
+    content_fingerprint,
+    deduplicate,
+    same_story,
+)
+from ..processors.synthesize import ArticleSummarizer, SummaryItem
+from ..ranking.engine import query_terms, rank_articles, rank_search_rows
 from ..reporting.formatter import format_report
 from ..state import Article, ResearchState
-from .decision_engine import LayaDecisionEngine
-from .policy import choose_action
+from .planner import ResearchPlan, ResearchPlanner
+from .policy import (
+    best_story,
+    deadline_passed,
+    evidence_sufficient,
+    finalize_evidence,
+)
+
+MIN_CONTENT_CHARS = 200
 
 
-def _same_story(title: str, other: str) -> bool:
-    a, b = title_key(title), title_key(other)
-    union = a | b
-    return bool(union) and len(a & b) / len(union) >= 0.45
+def _int_env(name: str, default: int, low: int, high: int) -> int:
+    try:
+        return max(low, min(high, int(os.getenv(name, str(default)))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _host(url: str) -> str:
+    return (urlparse(url).hostname or "").lower().removeprefix("www.")
 
 
 class ResearchPipeline:
-    def __init__(self, searcher=None, fetcher=None, decision_engine=None):
-        self.searcher = searcher or WebSearchClient(max_results=int(os.getenv("HUB_RESEARCH_RESULTS_PER_QUERY", "12")))
-        self.fetcher = fetcher or fetch_article
-        self.decision_engine = decision_engine or LayaDecisionEngine()
-        self.mode = os.getenv("HUB_RESEARCH_LAYA_MODE", "shadow").lower()
-        if self.mode not in {"shadow", "active", "off"}:
-            self.mode = "shadow"
-        self.max_rounds = int(os.getenv("HUB_RESEARCH_MAX_SEARCH_ROUNDS", "2"))
-        self.max_pages = int(os.getenv("HUB_RESEARCH_MAX_PAGES", "12"))
+    def __init__(self, searcher=None, fetcher=None, planner=None, summarizer=None):
+        self.searcher = searcher or WebSearchClient(
+            max_results=_int_env("HUB_RESEARCH_RESULTS_PER_QUERY", 12, 3, 30))
+        self.fetcher = fetcher or fetch_article_meta
+        self.planner = planner or ResearchPlanner()
+        self.summarizer = summarizer or ArticleSummarizer()
+        self.max_rounds = _int_env("HUB_RESEARCH_MAX_SEARCH_ROUNDS", 3, 1, 6)
+        self.max_pages = _int_env("HUB_RESEARCH_MAX_PAGES", 12, 1, 40)
+        self.pages_per_round = _int_env("HUB_RESEARCH_PAGES_PER_ROUND", 4, 1, 12)
+        self.max_per_domain = _int_env("HUB_RESEARCH_MAX_PER_DOMAIN", 2, 1, 6)
+        self.content_chars = _int_env("HUB_RESEARCH_CONTENT_CHARS", 12000, 1000, 40000)
+        self.workers = _int_env("HUB_RESEARCH_FETCH_WORKERS", 4, 1, 8)
+        self.deadline_seconds = _int_env("HUB_RESEARCH_DEADLINE_SECONDS", 90, 1, 600)
+        self.min_items = _int_env("HUB_RESEARCH_MIN_ITEMS", 5, 1, 10)
 
-    def _search(self, state: ResearchState):
-        suffixes = ["", " latest", " analysis official announcement"]
-        query = f"{state.query}{suffixes[min(state.search_rounds, len(suffixes) - 1)]}"
+    # -- search -----------------------------------------------------------
+    @staticmethod
+    def _queue_rows(state: ResearchState, rows: list[dict]) -> list[dict]:
+        """Queue candidates by URL only.
+
+        Cross-publisher copies of one story are kept here: ``verify`` needs them
+        to reach a second independent source, and selection decides which story
+        to fetch (not the search backend).
+        """
+        queued: list[dict] = []
+        seen = set(state.seen_urls)
+        for row in state.pending_urls + rows:
+            url = canonical_url(row.get("url", ""))
+            if not url.startswith(("http://", "https://")) or url in seen:
+                continue
+            seen.add(url)
+            queued.append({**row, "url": url})
+        return queued
+
+    def _search(self, state: ResearchState, query: str) -> list[dict]:
         state.search_rounds += 1
+        state.queries_tried.append(query)
         try:
-            rows = self.searcher.search(query)
+            rows = list(self.searcher.search(query) or [])
         except Exception as exc:
-            state.warnings.append(f"Search failed: {type(exc).__name__}: {exc}")
-            state.actions.append(f"SEARCH: failed for round {state.search_rounds}")
-            return
+            state.warnings.append(f"Tìm kiếm lỗi: {type(exc).__name__}: {exc}")
+            state.actions.append(f"SEARCH[{state.search_rounds}]: lỗi")
+            return []
         state.search_evidence.extend(rows)
-        merged = deduplicate(state.all_search_results + rows)
-        state.all_search_results = merged
-        fetched = {a.url for a in state.articles}
-        queued = {r["url"] for r in state.pending_urls}
-        state.pending_urls.extend(r for r in merged
-                                  if r["url"] not in fetched and r["url"] not in queued)
-        state.actions.append(f"SEARCH: {len(rows)} results for round {state.search_rounds}")
+        state.all_search_results = deduplicate(state.all_search_results + rows)
+        state.pending_urls = self._queue_rows(state, rows)
+        for error in getattr(self.searcher, "errors", None) or []:
+            if error not in state.warnings:
+                state.warnings.append(error)
+        state.actions.append(
+            f"SEARCH[{state.search_rounds}]: {len(rows)} kết quả cho “{query[:70]}”")
+        return rows
 
-    def _fetch_next(self, state: ResearchState):
-        if not state.pending_urls or state.fetched_count >= state.max_pages:
-            return
-        row = state.pending_urls.pop(0)
-        url = row["url"]
-        domain = (urlparse(url).hostname or "").removeprefix("www.")
+    def _next_query(self, state: ResearchState, plan: ResearchPlan) -> str:
+        tried = {item.casefold() for item in state.queries_tried}
+        if state.search_rounds < len(plan.queries):
+            candidate = plan.queries[state.search_rounds]
+            if candidate.casefold() not in tried:
+                return candidate
+        if state.intent == "verify":
+            story = best_story(state)
+            if story:
+                candidate = f'"{story[0].title[:140]}"'
+                if candidate.casefold() not in tried:
+                    return candidate
+        return ""
+
+    # -- selection --------------------------------------------------------
+    def _select_urls(self, state: ResearchState, terms: list[str],
+                     preferred_domains: list[str] | None) -> list[dict]:
+        """Score candidates *before* fetching: best 4 URLs, ≤2 per domain, one per story."""
+        budget = state.max_pages - state.fetched_count
+        limit = min(state.pages_per_round, budget)
+        if limit <= 0:
+            return []
+        ranked = rank_search_rows(
+            [row for row in state.pending_urls if row.get("url") not in state.seen_urls],
+            terms, preferred_domains=preferred_domains,
+        )
+        chosen: list[dict] = []
+        per_domain: Counter[str] = Counter()
+        fetched_titles = [article.title for article in state.articles]
+        for row in ranked:
+            url = row.get("url", "")
+            host = _host(url)
+            if not url.startswith(("http://", "https://")) or not host:
+                continue
+            if per_domain[host] >= self.max_per_domain:
+                continue
+            if any(same_story(row.get("title", ""), other.get("title", "")) for other in chosen):
+                continue
+            if state.intent != "verify" and any(
+                same_story(row.get("title", ""), title) for title in fetched_titles
+            ):
+                continue      # digest wants new stories, not copies of fetched ones
+            chosen.append(row)
+            per_domain[host] += 1
+            if len(chosen) >= limit:
+                break
+        selected = {row["url"] for row in chosen}
+        state.seen_urls.update(selected)
+        state.pending_urls = [row for row in state.pending_urls if row.get("url") not in selected]
+        return chosen
+
+    # -- fetch ------------------------------------------------------------
+    def _call_fetcher(self, url: str) -> tuple[str, str, str | None]:
+        result = self.fetcher(url)
+        if isinstance(result, tuple) and len(result) == 3:
+            text, final_url, published = result
+        else:
+            text, final_url = result
+            published = None
+        return text or "", final_url or url, published
+
+    def _fetch_one(self, row: dict) -> tuple[Article, list[str]]:
+        url = row.get("url", "")
+        # Google News links redirect; use the publisher URL from RSS as fallback
+        # so failed fetches still carry the real domain, not news.google.com.
+        domain = _host(row.get("publisher_url") or url)
         article = Article(url=url, title=row.get("title") or url,
-                          snippet=row.get("snippet", ""), source=domain,
-                          published_at=row.get("published_at"))
+                          snippet=row.get("snippet") or "", source=domain,
+                          published_at=row.get("published_at"),
+                          date_source="search" if row.get("published_at") else "unknown")
+        warnings: list[str] = []
         try:
-            content, final_url = self.fetcher(url)
-            article.content = content[:12000]
+            text, final_url, published = self._call_fetcher(url)
+            article.content = text[: self.content_chars]
             article.url = final_url
-            article.source = (urlparse(final_url).hostname or domain).removeprefix("www.")
+            article.source = _host(final_url) or domain
+            if published:
+                article.published_at = published
+                article.date_source = "metadata"
+            article.fingerprint = content_fingerprint(article.content)
         except Exception as exc:
             article.fetch_error = f"{type(exc).__name__}: {exc}"
             detail = str(exc).replace("\n", " ")[:240]
             category = getattr(exc, "category", type(exc).__name__)
             status = getattr(exc, "status_code", None)
             status_text = f" HTTP {status}" if status else ""
-            state.warnings.append(f"Fetch {category}{status_text} for {url}: {detail}")
-        # Trang render bằng JS (vd. MSN) chỉ trả vài ký tự: dùng snippet của search thay thế.
-        if len(article.content.strip()) < 200 and article.snippet:
+            warnings.append(f"Tải lỗi {category}{status_text} cho {url}: {detail}")
+        # JS-rendered pages (e.g. MSN) return a shell: keep the search snippet.
+        if len(article.content.strip()) < MIN_CONTENT_CHARS and article.snippet:
             article.content = article.snippet
-            article.fetch_error = article.fetch_error or "Thin content, used search snippet"
-        corroborating = set()
-        for candidate in state.search_evidence:
-            if candidate.get("url") != url and _same_story(article.title, candidate.get("title", "")):
-                host = (urlparse(candidate["url"]).hostname or "").removeprefix("www.")
-                if host and host != article.source:
-                    corroborating.add(host)
-        if article.source:
-            corroborating.add(article.source)
-        article.corroborating_sources = sorted(corroborating)
-        state.articles.append(article)
-        state.fetched_count += 1
-        state.actions.append(f"FETCH: {article.title[:90]}")
+            article.fetch_error = article.fetch_error or "Nội dung mỏng, dùng snippet"
+        return article, warnings
 
-    def _verify_top(self, state: ResearchState):
-        if not state.articles:
+    def _fetch_many(self, state: ResearchState, rows: list[dict]) -> None:
+        if not rows:
             return
-        current = rank_articles(state.articles)[0]
-        query = f'"{current.title[:160]}"'
-        try:
-            rows = self.searcher.search(query)
-        except Exception as exc:
-            state.warnings.append(f"Verification search failed: {type(exc).__name__}")
-            return
-        state.search_evidence.extend(rows)
-        domains = set(current.corroborating_sources)
-        for row in rows:
-            if _same_story(current.title, row.get("title", "")):
-                host = (urlparse(row.get("url", "")).hostname or "").removeprefix("www.")
-                if host:
-                    domains.add(host)
-        current.corroborating_sources = sorted(domains)
-        state.actions.append(f"VERIFY: {len(domains)} distinct matching domains for top story")
-
-    def run(self, query: str) -> tuple[ResearchState, list[Article]]:
-        state = ResearchState(query=query, max_search_rounds=self.max_rounds, max_pages=self.max_pages)
-        for _ in range(state.max_iterations):
-            engine = self.decision_engine if self.mode != "off" else None
-            action, predicted = choose_action(state, engine, self.mode)
-            if action == "SEARCH_MORE":
-                self._search(state)
-            elif action == "FETCH_NEXT":
-                self._fetch_next(state)
-            elif action == "VERIFY_TOP":
-                self._verify_top(state)
-                # Prevent repeated VERIFY_TOP from trapping the loop.
-                if self.mode == "active":
-                    state.actions.append("VERIFY completed; next action must progress or stop")
-                    if state.pending_urls:
-                        self._fetch_next(state)
-                    elif state.search_rounds < state.max_search_rounds:
-                        self._search(state)
-                    else:
-                        break
-            else:
-                break
+        workers = max(1, min(self.workers, len(rows)))
+        if workers == 1:
+            results = [self._fetch_one(row) for row in rows]
         else:
-            state.warnings.append("Reached hard iteration limit; research stopped safely.")
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                results = list(pool.map(self._fetch_one, rows))
+        for article, warnings in results:
+            state.articles.append(article)
+            state.fetched_count += 1
+            state.seen_urls.add(article.url)
+            state.warnings.extend(warnings)
+            state.actions.append(f"FETCH: {article.title[:90]}")
 
-        laya_scores = {}
-        if self.mode != "off" and state.articles and not getattr(self.decision_engine, "_unavailable", False):
-            candidates = [a for a in state.articles if a.content][:8]
-            try:
-                laya_scores = self.decision_engine.score_articles([
-                    {"url": a.url, "title": a.title, "source": a.source,
-                     "published_at": a.published_at, "content": a.content[:250]}
-                    for a in candidates
-                ])
-            except Exception as exc:
-                state.warnings.append(f"Laya scoring unavailable: {type(exc).__name__}")
+    # -- corroboration ----------------------------------------------------
+    def _annotate_corroboration(self, state: ResearchState) -> None:
+        """Count independent domains per story, ignoring syndicated copies."""
         for article in state.articles:
-            if article.url in laya_scores:
-                article.laya_score = laya_scores[article.url]
-        ranked = rank_articles(state.articles, laya_scores, use_laya=self.mode == "active")
-        return state, ranked
+            sources: set[str] = set()
+            if article.source:
+                sources.add(article.source)
+            for other in state.articles:
+                if other is article or not same_story(article.title, other.title):
+                    continue
+                if (article.fingerprint and other.fingerprint
+                        and article.fingerprint == other.fingerprint):
+                    continue      # same wire copy republished, not independent
+                if other.source:
+                    sources.add(other.source)
+            for row in state.search_evidence:
+                if row.get("url") == article.url:
+                    continue
+                if not same_story(article.title, row.get("title", "")):
+                    continue
+                host = _host(row.get("url", ""))
+                if host and host != article.source:
+                    sources.add(host)
+            article.corroborating_sources = sorted(sources)
+
+    # -- run --------------------------------------------------------------
+    def run(self, query: str) -> tuple[ResearchState, list[SummaryItem], list[dict]]:
+        query = " ".join((query or "").split())
+        plan = self.planner.plan(query)
+        state = ResearchState(
+            query=query,
+            plan=plan,
+            intent=plan.intent,
+            max_search_rounds=self.max_rounds,
+            max_pages=self.max_pages,
+            pages_per_round=self.pages_per_round,
+            min_items=self.min_items,
+        )
+        state.deadline_at = time.time() + self.deadline_seconds
+        if plan.note:
+            state.warnings.append(plan.note)
+        legacy = [name for name in ("HUB_RESEARCH_LAYA_MODE", "HUB_LAYA_MODEL", "HUB_LAYA_DEVICE")
+                  if os.getenv(name)]
+        if legacy:
+            state.warnings.append(
+                f"{', '.join(legacy)} đã bỏ và không còn tác dụng; có thể xoá khỏi .env.")
+        state.actions.append(
+            f"PLAN: {len(plan.queries)} truy vấn · {plan.intent} · {plan.origin}")
+        terms = query_terms(query, " ".join(plan.queries))
+
+        while not deadline_passed(state):
+            sufficient, reason = evidence_sufficient(state)
+            if sufficient:
+                state.stop_reason = reason
+                break
+            if state.search_rounds >= state.max_search_rounds:
+                state.stop_reason = f"đã dùng hết {state.max_search_rounds} vòng tìm kiếm"
+                break
+            if state.fetched_count >= state.max_pages:
+                state.stop_reason = f"đã đọc đủ {state.max_pages} trang"
+                break
+            next_query = self._next_query(state, plan)
+            if not next_query:
+                state.stop_reason = "hết truy vấn trong kế hoạch"
+                break
+            self._search(state, next_query)
+            selected = self._select_urls(state, terms, plan.domains)
+            if not selected:
+                continue
+            self._fetch_many(state, selected)
+            self._annotate_corroboration(state)
+            rank_articles(state.articles, terms, intent=plan.intent,
+                          recency_days=plan.recency_days,
+                          preferred_domains=plan.domains)
+        else:
+            state.stop_reason = f"hết thời gian {self.deadline_seconds}s"
+
+        ranked = rank_articles(state.articles, terms, intent=plan.intent,
+                               recency_days=plan.recency_days,
+                               preferred_domains=plan.domains)
+        sufficient, reason = evidence_sufficient(state)
+        finalize_evidence(state, state.stop_reason or reason)
+        if not state.stop_reason:
+            state.stop_reason = reason or "hết ngân sách"
+        items, dropped = self.summarizer.summarize(query, ranked)
+        return state, items, dropped
 
 
 def run_research(query: str) -> str:
     pipeline = ResearchPipeline()
-    state, ranked = pipeline.run(query)
-    readable = [a for a in ranked if a.content]
-    return format_report(state, readable or ranked, pipeline.mode)
+    state, items, dropped = pipeline.run(query)
+    return format_report(state, items, dropped)
 
 ```
 
 ### src/hub/agents/research/controller/policy.py  [FULL]
 ```python
+"""Deterministic research policy: when to keep going and when to stop.
+
+The LLM only plans the queries (see ``planner.py``); every loop decision here is
+plain Python with hard budgets, so research can never run away and the choice is
+reproducible in tests.
+"""
 from __future__ import annotations
-from ..state import ResearchState
+
+import os
+import time
+
+from ..processors.deduplicate import independent_source_count, same_story
+from ..state import Article, ResearchState
+
+MIN_CONTENT_CHARS = 200
+VERIFY_MIN_CHARS = 800
 
 
-def deterministic_action(state: ResearchState) -> str:
-    """Safe bounded policy used by default and whenever Laya is unavailable/uncertain."""
+def deadline_passed(state: ResearchState) -> bool:
+    return bool(state.deadline_at) and time.time() >= state.deadline_at
+
+
+def usable_articles(state: ResearchState) -> list[Article]:
+    return [article for article in state.articles
+            if len((article.content or "").strip()) >= MIN_CONTENT_CHARS]
+
+
+def cluster_stories(articles: list[Article]) -> list[list[Article]]:
+    """Group articles that describe the same story, best-scored story first."""
+    clusters: list[list[Article]] = []
+    for article in sorted(articles, key=lambda item: item.final_score, reverse=True):
+        for cluster in clusters:
+            if same_story(article.title, cluster[0].title):
+                cluster.append(article)
+                break
+        else:
+            clusters.append([article])
+    return clusters
+
+
+def best_story(state: ResearchState) -> list[Article]:
+    clusters = cluster_stories(usable_articles(state))
+    return clusters[0] if clusters else []
+
+
+def min_items(state: ResearchState) -> int:
+    value = getattr(state, "min_items", None)
+    if value:
+        return max(1, int(value))
+    try:
+        return max(1, int(os.getenv("HUB_RESEARCH_MIN_ITEMS", "5")))
+    except ValueError:
+        return 5
+
+
+def evidence_sufficient(state: ResearchState) -> tuple[bool, str]:
+    """Intent-aware stop rule: a digest needs breadth, a verify needs independence."""
+    usable = usable_articles(state)
+    if not usable:
+        return False, ""
+    if state.intent == "verify":
+        story = best_story(state)
+        sources = independent_source_count(story)
+        if sources >= 2 and sum(len(a.content) for a in story) >= VERIFY_MIN_CHARS:
+            return True, f"đủ {sources} nguồn độc lập cho câu chuyện trọng tâm"
+        return False, ""
+
+    stories = cluster_stories(usable)
+    domains = {article.source for article in usable if article.source}
+    needed = min_items(state)
+    if len(stories) >= needed and len(domains) >= 2:
+        return True, f"đủ {len(stories)} câu chuyện khác nhau từ {len(domains)} domain"
+    return False, ""
+
+
+def stop_reason(state: ResearchState) -> str:
+    """First applicable hard stop; empty string when research should continue."""
+    if deadline_passed(state):
+        return f"hết thời gian {int(os.getenv('HUB_RESEARCH_DEADLINE_SECONDS', '90'))}s"
     if state.fetched_count >= state.max_pages:
+        return f"đã đọc đủ {state.max_pages} trang"
+    if state.search_rounds >= state.max_search_rounds:
+        return f"đã dùng hết {state.max_search_rounds} vòng tìm kiếm"
+    return ""
+
+
+def next_action(state: ResearchState) -> str:
+    """FETCH_NEXT (queued URLs), SEARCH_MORE (new round) or STOP."""
+    if state.fetched_count >= state.max_pages or deadline_passed(state):
         return "STOP"
     if state.pending_urls:
         return "FETCH_NEXT"
@@ -4366,130 +5783,101 @@ def deterministic_action(state: ResearchState) -> str:
     return "STOP"
 
 
-def choose_action(state: ResearchState, laya_engine=None, mode: str = "shadow") -> tuple[str, str | None]:
-    fallback = deterministic_action(state)
-    if laya_engine is None or getattr(laya_engine, "_unavailable", False):
-        return fallback, None
-    try:
-        predicted, confidence = laya_engine.choose_action(state.compact())
-    except Exception as exc:
-        try:
-            laya_engine._unavailable = True
-        except Exception:
-            pass
-        state.warnings.append(f"Laya unavailable; fallback policy used: {type(exc).__name__}: {exc}")
-        return fallback, None
-    if predicted not in {"FETCH_NEXT", "SEARCH_MORE", "VERIFY_TOP", "STOP"}:
-        state.warnings.append("Laya returned an unknown action; fallback policy used.")
-        return fallback, None
-    state.actions.append(f"Laya predicted {predicted} (confidence={confidence})")
-    if mode != "active":
-        return fallback, predicted
-    # Confidence is not a correctness guarantee. Active mode is opt-in and still obeys hard budgets.
-    if predicted == "FETCH_NEXT" and state.pending_urls and state.fetched_count < state.max_pages:
-        return predicted, predicted
-    if predicted == "SEARCH_MORE" and state.search_rounds < state.max_search_rounds:
-        return predicted, predicted
-    if predicted == "VERIFY_TOP" and state.articles:
-        return predicted, predicted
-    if predicted == "STOP":
-        return predicted, predicted
-    state.warnings.append(f"Laya action {predicted} was unsafe/inapplicable; deterministic fallback used.")
-    return fallback, predicted
-
-```
-
-### src/hub/agents/research/processors/deduplicate.py  [FULL]
-```python
-from __future__ import annotations
-
-import re
-from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
-
-TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
-
-
-def canonical_url(url: str) -> str:
-    parts = urlsplit((url or "").strip())
-    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-             if not k.lower().startswith("utm_") and k.lower() not in TRACKING_KEYS]
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/") or "/",
-                       urlencode(query), ""))
-
-
-def title_key(title: str) -> set[str]:
-    """Normalised token set of a title, used for same-story similarity."""
-    return set(re.findall(r"[\w]+", (title or "").casefold()))
-
-
-def _host(url: str) -> str:
-    return (urlsplit(url).hostname or "").lower().removeprefix("www.")
-
-
-def _path(url: str) -> str:
-    return (urlsplit(url).path or "/").rstrip("/") or "/"
-
-
-def _similarity(left: set[str], right: set[str]) -> float:
-    union = left | right
-    return len(left & right) / len(union) if union else 1.0
-
-
-def deduplicate(rows: list[dict]) -> list[dict]:
-    """Remove duplicate search hits while preserving same-path cross-publisher copies.
-
-    Exact canonical URLs are always removed. Near-identical titles are collapsed
-    within one publisher. Across publishers, retain a matching title only when
-    both publishers point to the same article path (syndicated coverage).
-    """
-    output: list[dict] = []
-    seen_urls: set[str] = set()
-    accepted: list[tuple[str, str, set[str]]] = []
-
-    for row in rows:
-        url = canonical_url(row.get("url", ""))
-        if not url or url in seen_urls:
-            continue
-        host, path = _host(url), _path(url)
-        tokens = title_key(row.get("title", ""))
-        duplicate = False
-        for old_host, old_path, old_tokens in accepted:
-            if _similarity(tokens, old_tokens) < 0.78:
-                continue
-            # Same host: same story copied to another URL. Different hosts:
-            # different paths imply duplicate search noise; same path is retained.
-            if host == old_host or path != old_path:
-                duplicate = True
-                break
-        if duplicate:
-            continue
-        seen_urls.add(url)
-        accepted.append((host, path, tokens))
-        output.append({**row, "url": url})
-    return output
-
+def finalize_evidence(state: ResearchState, reason: str = "") -> None:
+    """Record the evidence level so the report can state it explicitly."""
+    usable = usable_articles(state)
+    if not usable:
+        state.evidence_level, state.evidence_score = "insufficient", 0.0
+    else:
+        stories = cluster_stories(usable)
+        corroborated = sum(
+            1 for cluster in stories[:5] if independent_source_count(cluster) >= 2
+        )
+        state.evidence_score = round(corroborated / max(1, min(5, len(stories))), 2)
+        if state.intent == "verify":
+            sources = independent_source_count(best_story(state))
+            state.evidence_level = "corroborated" if sources >= 2 else "single_source"
+        else:
+            # Digest quality is breadth of corroborated stories, not the top one.
+            state.evidence_level = "corroborated" if corroborated >= 2 else "single_source"
+    state.stop_reason = reason or state.stop_reason
 
 ```
 
 ### src/hub/agents/research/ranking/engine.py  [FULL]
 ```python
 from __future__ import annotations
-from datetime import datetime, timezone, timedelta
+
 import re
-from urllib.parse import urlparse
+import unicodedata
+from datetime import datetime, timedelta, timezone
+
+from ..processors.source_quality import host_of, source_score
 from ..state import Article
-from ..processors.source_quality import source_score
+
+# Function words only: content words like "tin", "giá", "AI" must survive,
+# otherwise short news questions would look like they have no keywords.
+STOPWORDS = {
+    "va", "la", "cua", "co", "cho", "voi", "nhung", "cac", "mot", "nay", "do",
+    "thi", "ma", "de", "tu", "den", "trong", "ngoai", "khi", "sau", "truoc",
+    "the", "and", "for", "with", "from", "that", "this", "what", "when", "how",
+    "mot", "cung", "rat", "hon", "nhat", "moi", "hom", "nay", "bay", "gio",
+}
+
+# (relevance, freshness, credibility, corroboration, completeness)
+DEFAULT_WEIGHTS = (0.40, 0.25, 0.20, 0.10, 0.05)
+GENERIC_WEIGHTS = (0.00, 0.45, 0.30, 0.15, 0.10)
 
 
-def _recency_score(published_at: str | None) -> float:
+def fold(text: str) -> str:
+    """Lower-case and remove Vietnamese diacritics (for tolerant token matching)."""
+    decomposed = unicodedata.normalize("NFD", text or "")
+    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn").casefold()
+
+
+def tokens(text: str) -> list[str]:
+    return [token for token in re.findall(r"\w+", fold(text)) if len(token) > 1]
+
+
+def query_terms(*texts: str, limit: int = 24) -> list[str]:
+    """Meaningful query keywords, de-duplicated and order-preserving."""
+    terms: list[str] = []
+    for text in texts:
+        for token in tokens(text):
+            if token in STOPWORDS or token in terms:
+                continue
+            terms.append(token)
+    return terms[:limit]
+
+
+def _coverage(haystack: list[str], terms: list[str]) -> float:
+    if not terms or not haystack:
+        return 0.0
+    pool = set(haystack)
+    matched = sum(1 for term in terms if term in pool)
+    hits = sum(haystack.count(term) for term in terms)
+    frequency = min(1.0, hits / (2 * len(terms)))
+    return min(1.0, 0.75 * (matched / len(terms)) + 0.25 * frequency)
+
+
+def relevance_score(article: Article, terms: list[str]) -> float:
+    text = f"{article.title} {article.snippet} {article.content[:800]}"
+    return _coverage(tokens(text), terms)
+
+
+def _recency_score(published_at: str | None, window_days: float = 7) -> float | None:
+    """1.0 = just published, 0.0 = older than the window, None = date unknown."""
     if not published_at:
-        return 0.35
+        return None
     try:
-        relative = re.fullmatch(r"\s*(\d+)\s+(minute|hour|day)s?\s+ago\s*", published_at.lower())
+        relative = re.fullmatch(r"\s*(\d+)\s+(minute|hour|day)s?\s+ago\s*",
+                                published_at.lower())
         if relative:
             amount = int(relative.group(1))
             unit = relative.group(2)
-            delta = timedelta(minutes=amount) if unit == "minute" else timedelta(hours=amount) if unit == "hour" else timedelta(days=amount)
+            delta = (timedelta(minutes=amount) if unit == "minute"
+                     else timedelta(hours=amount) if unit == "hour"
+                     else timedelta(days=amount))
             value = datetime.now(timezone.utc) - delta
         elif published_at.lower().strip() == "yesterday":
             value = datetime.now(timezone.utc) - timedelta(days=1)
@@ -4498,88 +5886,199 @@ def _recency_score(published_at: str | None) -> float:
         if value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
         hours = max(0.0, (datetime.now(timezone.utc) - value).total_seconds() / 3600)
-        return max(0.0, 1.0 - hours / (72 * 1.0))
-    except (ValueError, TypeError):
-        return 0.35
+        return max(0.0, 1.0 - hours / max(1.0, window_days * 24))
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
-def rank_articles(articles: list[Article], laya_scores: dict[str, float] | None = None,
-                  use_laya: bool = False) -> list[Article]:
-    laya_scores = laya_scores or {}
+def _weights(terms: list[str], intent: str, date_known: bool) -> tuple[float, ...]:
+    relevance, freshness, credibility, corroboration, completeness = (
+        DEFAULT_WEIGHTS if len(terms) >= 2 else GENERIC_WEIGHTS
+    )
+    if not date_known:
+        # Unknown dates must not look fresh. In digest mode the lost freshness
+        # weight moves to relevance/credibility so old reprints fall down.
+        lost = freshness * (0.7 if intent == "digest" else 0.3)
+        freshness -= lost
+        relevance += lost * 0.6
+        credibility += lost * 0.4
+    return relevance, freshness, credibility, corroboration, completeness
+
+
+def _preferred_boost(url: str, preferred_domains: list[str] | None) -> float:
+    """Small nudge for domains the planner suggested; never a hard filter."""
+    if not preferred_domains:
+        return 0.0
+    host = host_of(url)
+    return 0.08 if any(host == d or host.endswith("." + d) for d in preferred_domains) else 0.0
+
+
+def rank_articles(articles: list[Article], terms: list[str] | None = None,
+                  intent: str = "digest", recency_days: int = 7,
+                  preferred_domains: list[str] | None = None) -> list[Article]:
+    terms = terms or []
     for article in articles:
-        domain_score = source_score(article.url)
-        freshness = _recency_score(article.published_at)
-        corroboration = min(1.0, len(set(article.corroborating_sources)) / 3.0)
-        content_signal = min(1.0, len(article.content) / 5000.0)
-        # Transparent baseline: no social-engagement data is available, so this is not a virality score.
-        heuristic = 100 * (0.35 * freshness + 0.30 * domain_score + 0.25 * corroboration + 0.10 * content_signal)
-        article.heuristic_score = round(heuristic, 2)
-        if use_laya and article.url in laya_scores:
-            article.laya_score = round(laya_scores[article.url], 2)
-            article.final_score = round(0.65 * article.laya_score + 0.35 * heuristic, 2)
-        else:
-            article.final_score = article.heuristic_score
+        freshness = _recency_score(article.published_at, recency_days)
+        date_known = freshness is not None
+        relevance, fresh_w, credibility, corroboration_w, completeness = _weights(
+            terms, intent, date_known)
+        independent = len(set(article.corroborating_sources))
+        relevance_fraction = relevance_score(article, terms)
+        article.relevance_score = round(100 * relevance_fraction, 2)
+        credibility_score = min(
+            1.0, source_score(article.url) + _preferred_boost(article.url, preferred_domains))
+        article.heuristic_score = round(100 * (
+            relevance * relevance_fraction
+            + fresh_w * (freshness or 0.0)
+            + credibility * credibility_score
+            + corroboration_w * min(1.0, independent / 3.0)
+            + completeness * min(1.0, len(article.content) / 5000.0)
+        ), 2)
+        article.final_score = article.heuristic_score
     return sorted(articles, key=lambda item: item.final_score, reverse=True)
+
+
+def rank_search_rows(rows: list[dict], terms: list[str], recency_days: int = 7,
+                     preferred_domains: list[str] | None = None) -> list[dict]:
+    """Score candidates before fetching, so budgets are spent on the best URLs."""
+    scored: list[tuple[float, dict]] = []
+    for row in rows:
+        relevance = _coverage(tokens(f"{row.get('title', '')} {row.get('snippet', '')}"), terms)
+        freshness = _recency_score(row.get("published_at"), recency_days)
+        score = (0.55 * relevance + 0.30 * source_score(row.get("url", ""))
+                 + 0.15 * (freshness if freshness is not None else 0.25)
+                 + _preferred_boost(row.get("url", ""), preferred_domains))
+        scored.append((score, row))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [row for _score, row in scored]
 
 ```
 
-### src/hub/agents/research/state.py  [FULL]
+### src/hub/agents/research/reporting/formatter.py  [FULL]
 ```python
+"""Render the final research report.
+
+The report is intentionally compact: a plan line, an evidence line, at most five
+clean items with a 2–3 sentence summary, and a short line about what was
+filtered out. It never cuts a sentence in half and stays under the character
+budget used by the Telegram client.
+"""
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Any
+
+import os
+from datetime import datetime, timezone
+
+from ..processors.synthesize import SummaryItem
+from ..state import ResearchState
+
+DEFAULT_REPORT_CHARS = 3500
+_DROP_LABELS = {
+    "duplicate": "trùng lặp",
+    "clickbait": "giật tít",
+    "off-topic": "ngoài chủ đề",
+    "thin": "quá ngắn",
+    "unknown-url": "URL lạ",
+    "filtered": "đã lọc",
+}
+_LEVEL_LABELS = {
+    "insufficient": "chưa đủ",
+    "single_source": "chưa xác nhận chéo",
+    "corroborated": "có xác nhận chéo",
+}
 
 
-@dataclass
-class Article:
-    url: str
-    title: str
-    snippet: str = ""
-    source: str = ""
-    published_at: str | None = None
-    content: str = ""
-    corroborating_sources: list[str] = field(default_factory=list)
-    laya_score: float | None = None
-    heuristic_score: float = 0.0
-    relevance_score: float = 0.0
-    final_score: float = 0.0
-    fetch_error: str | None = None
+def _report_chars() -> int:
+    try:
+        return max(800, min(6000, int(os.getenv("HUB_RESEARCH_REPORT_CHARS",
+                                               str(DEFAULT_REPORT_CHARS)))))
+    except ValueError:
+        return DEFAULT_REPORT_CHARS
 
 
-@dataclass
-class ResearchState:
-    query: str
-    query_intent: str = "general"
-    search_rounds: int = 0
-    fetched_count: int = 0
-    max_search_rounds: int = 3
-    max_pages: int = 12
-    max_iterations: int = 20
-    pending_urls: list[dict[str, str]] = field(default_factory=list)
-    all_search_results: list[dict[str, str]] = field(default_factory=list)
-    search_evidence: list[dict[str, str]] = field(default_factory=list)
-    articles: list[Article] = field(default_factory=list)
-    actions: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-    evidence_level: str = "insufficient"
-    evidence_score: float = 0.0
+def _when(published_at: str | None) -> str:
+    if not published_at:
+        return "không rõ ngày"
+    lowered = published_at.lower().strip()
+    if lowered in {"yesterday", "hôm qua"}:
+        return "hôm qua"
+    try:
+        value = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        hours = max(0.0, (datetime.now(timezone.utc) - value).total_seconds() / 3600)
+        if hours < 1:
+            return "vừa xong"
+        if hours < 24:
+            return f"{int(hours)} giờ trước"
+        if hours < 24 * 7:
+            return f"{int(hours // 24)} ngày trước"
+        return value.strftime("%d/%m/%Y")
+    except (ValueError, TypeError, OverflowError):
+        return published_at[:40]
 
-    def compact(self) -> dict[str, Any]:
-        return {
-            "query": self.query[:300],
-            "query_intent": self.query_intent,
-            "search_rounds": self.search_rounds,
-            "fetched_count": self.fetched_count,
-            "pending_count": len(self.pending_urls),
-            "article_count": len(self.articles),
-            "max_search_rounds": self.max_search_rounds,
-            "max_pages": self.max_pages,
-            "top_candidates": [
-                {"title": a.title[:100], "source": a.source, "published_at": a.published_at}
-                for a in self.articles[:5]
-            ],
-        }
 
+def _confidence(item: SummaryItem) -> str:
+    return {"high": "độ tin cậy cao", "low": "độ tin cậy thấp"}.get(
+        item.confidence, "độ tin cậy vừa")
+
+
+def _drop_summary(dropped: list[dict]) -> str:
+    counts: dict[str, int] = {}
+    for entry in dropped:
+        reason = str(entry.get("reason") or "filtered")
+        label = _DROP_LABELS.get(reason, reason[:24])
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return ""
+    return " · ".join(f"{count} {label}" for label, count in counts.items())
+
+
+def format_report(state: ResearchState, items: list[SummaryItem],
+                  dropped: list[dict] | None = None) -> str:
+    budget = _report_chars()
+    domains = {article.source for article in state.articles if article.source}
+    plan_line = (f"Kế hoạch: {len(state.plan.queries) if state.plan else 0} truy vấn"
+                 f" · đọc {state.fetched_count}/{state.max_pages} trang"
+                 f" · {len(domains)} domain")
+    if state.stop_reason:
+        plan_line += f" · dừng: {state.stop_reason}"
+    corroborated = sum(1 for item in items if item.independent >= 2)
+    quality_line = (f"Độ tin cậy: {_LEVEL_LABELS.get(state.evidence_level, state.evidence_level)}"
+                    f" — {corroborated}/{len(items)} tin có xác nhận chéo")
+
+    lines = [f"## Research: {state.query}", plan_line, quality_line, ""]
+    if not items:
+        lines.append("Không thu thập được bài viết phù hợp. Thử câu hỏi cụ thể hơn "
+                     "hoặc bật thêm nguồn tìm kiếm.")
+    for index, item in enumerate(items, 1):
+        block = [f"**{index}. {item.headline}** · {item.domain or 'nguồn không rõ'}"
+                 f" · {_when(item.published_at)}"]
+        if item.summary:
+            block.append(item.summary)
+        meta = [f"{item.independent} nguồn"]
+        if item.sources:
+            meta.append("xác nhận: " + ", ".join(item.sources[:4]))
+        meta.append(_confidence(item))
+        block.append(" · ".join(meta))
+        block.append(item.url)
+        block.append("")
+        if len("\n".join(lines + block)) > budget - 200:
+            remaining = len(items) - index + 1
+            lines.append(f"… còn {remaining} tin chưa hiển thị để giữ báo cáo gọn.")
+            break
+        lines += block
+
+    filtered = _drop_summary(dropped or [])
+    if filtered:
+        lines.append(f"Đã lọc: {filtered}")
+    if state.warnings:
+        lines.append("")
+        lines.append("Ghi chú:")
+        lines += [f"- {warning[:200]}" for warning in state.warnings[:5]]
+    text = "\n".join(lines).strip()
+    if len(text) > budget:
+        text = text[:budget - 1].rstrip() + "…"
+    return text
 
 ```
 
@@ -5688,24 +7187,26 @@ def count_tokens(text: str) -> int:
 ### src/hub/agents/qa/prompts.py  [FULL]
 ```python
 """Prompts for the QA agent.  Kept separate so they're easy to tweak."""
-SYSTEM_PROMPT = """Bạn là trợ lý phân tích source code của một dự án đã được Agent Hub chọn. PROJECT_CONTEXT*.md (nếu có) chỉ là bản tóm tắt hỗ trợ; bạn vẫn có thể đọc source code trực tiếp khi context không tồn tại hoặc chưa đủ.
+SYSTEM_PROMPT = """Bạn là trợ lý phân tích source code của một dự án đã được Agent Hub chọn. Bạn được cấp một CHỈ MỤC dự án (cây thư mục + entry points) do hệ thống dựng tại chỗ; chỉ mục này KHÔNG chứa nội dung code.
 
 QUY TẮC:
 1. Trả lời bằng tiếng Việt, ngắn gọn, chính xác.
 2. Luôn trích dẫn vị trí: `file_path:dòng` (hoặc khoảng dòng) khi nói về code cụ thể.
-3. Nếu context không tồn tại hoặc thông tin CHƯA ĐỦ, hãy yêu cầu đọc thêm source code
+3. Nếu chỉ mục hoặc thông tin hiện có CHƯA ĐỦ, hãy yêu cầu đọc thêm source code
    bằng cách trả về JSON tool-call (xem bên dưới).  KHÔNG bịa code.
 4. Sau khi có thêm code, trả lời câu hỏi gốc kèm trích dẫn file:dòng.
 5. Dùng markdown formatting cho code blocks.
-6. PROJECT_CONTEXT là tài liệu tham khảo tùy chọn. Nếu không có file này, hãy dùng search_project/read_file/read_function để đọc source code; không yêu cầu người dùng tạo context trước.
-7. Chỉ phân tích project root được cung cấp trong system message. Không tìm hoặc đọc file bên ngoài root đó. Nếu context mâu thuẫn với source code, tin source code.
-8. Có thể có vài lượt hỏi–đáp trước đó nằm giữa context và câu hỏi hiện tại.
+6. Chỉ mục là bản đồ điều hướng. Khi cần chi tiết, dùng search_project/read_file/read_function
+   để đọc source code; không yêu cầu người dùng tạo context trước.
+7. Chỉ phân tích project root được cung cấp trong system message. Không tìm hoặc đọc file bên ngoài root đó. Nếu chỉ mục mâu thuẫn với source code, tin source code.
+8. Có thể có một khối LỊCH SỬ HỘI THOẠI trước câu hỏi hiện tại: vài lượt gần nhất giữ nguyên văn,
+   các lượt cũ hơn được rút gọn thành trích yếu có nhãn [qa]/[code]/[context]/[hub].
    Dùng chúng để hiểu các từ như "hàm đó", "file kia", "còn cái trước thì sao".
-   Nếu thông tin cũ mâu thuẫn với code mới đọc, tin code mới.
+   Trích yếu có thể thiếu chi tiết; nếu cần chắc chắn, đọc lại file. Nếu thông tin cũ mâu thuẫn với code mới đọc, tin code mới.
 """
-CONTEXT_HEADER = '--- PROJECT CONTEXT (tóm tắt dự án) ---\n{context}\n--- HẾT CONTEXT ---\n'
+CONTEXT_HEADER = '--- CHỈ MỤC DỰ ÁN (cây thư mục + entry points, dựng tại chỗ) ---\n{context}\n--- HẾT CHỈ MỤC ---\n'
 EXTRA_CODE_HEADER = '--- CODE BỔ SUNG: {path} ---\n```\n{code}\n```\n--- HẾT CODE BỔ SUNG ---\n'
-NEED_MORE_CODE_INSTRUCTION = """Nếu context ở trên chưa đủ để trả lời, hãy trả lời chính xác theo MỘT trong các format JSON sau
+NEED_MORE_CODE_INSTRUCTION = """Nếu chỉ mục ở trên chưa đủ để trả lời, hãy trả lời chính xác theo MỘT trong các format JSON sau
 (KHÔNG thêm gì khác ngoài JSON). Áp dụng cho mọi ngôn ngữ lập trình.
 
 Đọc file (mặc định ~500 dòng đầu):
@@ -5733,8 +7234,8 @@ from .node import research_node
 SPEC = AgentSpec(
     name="research",
     description=(
-        "Research Web Agent: tìm kiếm, thu thập, lọc trùng, kiểm chứng và xếp hạng "
-        "thông tin từ nhiều website; dùng Laya làm decision model, không dùng Gemini trong research loop."
+        "Research Web Agent: LLM lập kế hoạch tìm kiếm, thu thập và trích nội dung từ "
+        "nhiều website, lọc trùng, kiểm chứng chéo nguồn, xếp hạng và tóm tắt top tin sạch."
     ),
     node=research_node,
     parallel_safe=False,
@@ -5742,47 +7243,6 @@ SPEC = AgentSpec(
 
 __all__ = ["SPEC", "research_node"]
 
-```
-
-### src/hub/agents/research/collectors/search.py  [FULL]
-```python
-from __future__ import annotations
-import os
-
-
-class WebSearchClient:
-    def __init__(self, max_results: int = 12):
-        self.max_results = max_results
-
-    def search(self, query: str) -> list[dict]:
-        try:
-            from ddgs import DDGS
-            from ddgs.exceptions import DDGSException
-        except ImportError as exc:
-            raise RuntimeError("Thiếu ddgs. Cài bằng: pip install -e '.[research]'") from exc
-        region = os.getenv("HUB_RESEARCH_REGION", "wt-wt")
-        rows: list[dict] = []
-        with DDGS() as client:
-            for kind in ("news", "text"):
-                if len(rows) >= 5:
-                    break
-                try:
-                    rows += list(getattr(client, kind)(query, region=region,
-                                                       max_results=self.max_results) or [])
-                except DDGSException:
-                    continue
-        results = []
-        for row in rows:
-            url = row.get("href") or row.get("url")
-            if not url:
-                continue
-            results.append({
-                "url": url,
-                "title": row.get("title") or url,
-                "snippet": row.get("body") or row.get("snippet") or "",
-                "published_at": row.get("date") or row.get("published") or None,
-            })
-        return results
 ```
 
 ### src/hub/agents/research/controller/__init__.py  [FULL]
@@ -5828,18 +7288,38 @@ def research_node(state):
 ```python
 from urllib.parse import urlparse
 
-# A conservative starter allowlist. This is a heuristic, not a factual guarantee of credibility.
+# Curated starting list. It is a heuristic, not a factual guarantee of credibility.
+# The planner may only suggest these domains ("nguồn đã duyệt"), and the ranking
+# boosts them — results outside the list are still accepted when they are relevant.
 TRUSTED_DOMAINS = {
+    # Wire services and international outlets
     "reuters.com": 1.0, "apnews.com": 1.0, "bbc.com": 0.95, "bbc.co.uk": 0.95,
     "theguardian.com": 0.9, "nytimes.com": 0.9, "arstechnica.com": 0.9,
     "technologyreview.com": 0.9, "nature.com": 1.0, "science.org": 1.0,
     "openai.com": 0.85, "deepmind.google": 0.85, "ai.google": 0.85,
     "nvidia.com": 0.85, "microsoft.com": 0.85, "anthropic.com": 0.85,
+    "techcrunch.com": 0.8, "theverge.com": 0.8, "wired.com": 0.8,
+    # Vietnamese outlets (general + technology)
+    "vnexpress.net": 0.9, "tuoitre.vn": 0.85, "thanhnien.vn": 0.85,
+    "nhandan.vn": 0.85, "vietnamnet.vn": 0.8, "vtv.vn": 0.8,
+    "dantri.com.vn": 0.75, "znews.vn": 0.75, "thesaigontimes.vn": 0.75,
+    "vietnamplus.vn": 0.8, "cafef.vn": 0.7, "genk.vn": 0.7, "ictnews.vn": 0.7,
 }
+
+APPROVED_DOMAINS = tuple(sorted(TRUSTED_DOMAINS))
+
+
+def host_of(url: str) -> str:
+    return (urlparse(url).hostname or "").lower().removeprefix("www.")
+
+
+def is_approved(url: str) -> bool:
+    host = host_of(url)
+    return any(host == domain or host.endswith("." + domain) for domain in TRUSTED_DOMAINS)
 
 
 def source_score(url: str) -> float:
-    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    host = host_of(url)
     if host in TRUSTED_DOMAINS:
         return TRUSTED_DOMAINS[host]
     for domain, score in TRUSTED_DOMAINS.items():
@@ -5857,44 +7337,6 @@ def source_score(url: str) -> float:
 
 ### src/hub/agents/research/reporting/__init__.py  [FULL]
 ```python
-
-
-```
-
-### src/hub/agents/research/reporting/formatter.py  [FULL]
-```python
-from ..state import Article, ResearchState
-
-
-def format_report(state: ResearchState, articles: list[Article], mode: str) -> str:
-    lines = [f"## Research: {state.query}",
-             f"Laya mode: `{mode}` | Search rounds: {state.search_rounds} | Pages read: {state.fetched_count}",
-             "", "### Top results"]
-    if not articles:
-        lines.append("Không thu thập được bài viết phù hợp.")
-    for index, article in enumerate(articles[:10], 1):
-        lines += [
-            f"**{index}. {article.title}** — {article.final_score:.1f}/100",
-            f"- Source: {article.source or 'unknown'}",
-            f"- Published: {article.published_at or 'not available'}",
-            f"- URL: {article.url}",
-            f"- Cross-source matches: {len(set(article.corroborating_sources))}",
-        ]
-        if article.fetch_error:
-            lines.append(f"- Fetch status: {article.fetch_error[:220]}")
-        excerpt = (article.content or article.snippet).replace("\n", " ").strip()[:450]
-        if excerpt:
-            lines.append(f"- Summary extract: {excerpt}")
-        lines.append("")
-    lines += ["### Research notes",
-              "- Điểm xếp hạng là heuristic + Laya (nếu active), không phải thước đo độ viral.",
-              "- Ngày đăng có thể thiếu nếu website không cung cấp metadata.",
-              "- Trang chặn truy cập/CAPTCHA không được bypass; agent sẽ dùng snippet hoặc nguồn khác."]
-    if state.warnings:
-        lines += ["", "### Warnings"] + [f"- {warning}" for warning in state.warnings[:8]]
-    if state.actions:
-        lines += ["", "### Decision log"] + [f"- {action}" for action in state.actions[-8:]]
-    return "\n".join(lines)
 
 
 ```
@@ -6021,6 +7463,26 @@ class MemoryStore:
         with self._connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, thread_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, agent TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, id)")
+            db.execute("CREATE TABLE IF NOT EXISTS thread_state (thread_id TEXT PRIMARY KEY, active_project_root TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+
+    def set_active_project(self, thread_id: str, root: str | Path | None):
+        """Remember the project a thread is working on (survives a CLI restart)."""
+        with self._connect() as db:
+            if root:
+                db.execute(
+                    "INSERT INTO thread_state(thread_id, active_project_root) VALUES (?, ?) "
+                    "ON CONFLICT(thread_id) DO UPDATE SET active_project_root=excluded.active_project_root, updated_at=CURRENT_TIMESTAMP",
+                    (thread_id, str(root)),
+                )
+            else:
+                db.execute("DELETE FROM thread_state WHERE thread_id=?", (thread_id,))
+
+    def get_active_project(self, thread_id: str) -> str | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT active_project_root FROM thread_state WHERE thread_id=?", (thread_id,)
+            ).fetchone()
+        return row[0] if row and row[0] else None
 
     def save_turn(self, thread_id: str, user_text: str, assistant_text: str, agent: str | None = None):
         with self._connect() as db:
@@ -6055,6 +7517,19 @@ class MemoryStore:
     def read_project_memory(root: str | Path = ".") -> str:
         p = Path(root) / ".hub" / "project_memory.md"
         return p.read_text(encoding="utf-8") if p.is_file() else ""
+
+    @staticmethod
+    def append_project_memory(root: str | Path, note: str) -> Path:
+        """Append one durable fact to <project>/.hub/project_memory.md (read by QA every turn)."""
+        note = note.strip()
+        if not note:
+            raise ValueError("Memory note cannot be empty")
+        path = Path(root) / ".hub" / "project_memory.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(("\n" if path.stat().st_size else "") + f"- {note}\n")
+        return path
+
 
 ```
 
@@ -7338,6 +8813,131 @@ def test_forced_agent_skips_llm(tmp_path, monkeypatch):
 
 ```
 
+### tests/test_mini_map.py  [FULL]
+```python
+"""Tests for the on-the-fly project index used by the QA agent."""
+import time
+
+from hub.mini_map import build_mini_map
+
+
+def make_project(root):
+    (root / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\n[project.scripts]\ndemo = \"demo.main:run\"\n",
+        encoding="utf-8",
+    )
+    (root / "README.md").write_text("# demo\n", encoding="utf-8")
+    pkg = root / "src" / "demo"
+    pkg.mkdir(parents=True)
+    (pkg / "main.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+    (pkg / "util.py").write_text("X = 1\n", encoding="utf-8")
+    tests = root / "tests"
+    tests.mkdir()
+    (tests / "test_x.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
+
+
+def test_index_lists_tree_entry_points_and_scripts(tmp_path):
+    make_project(tmp_path)
+    text = build_mini_map(tmp_path)
+    assert "Dự án: " in text and "file" in text
+    assert "src/demo/" in text
+    assert "src/demo/main.py" in text          # entry point
+    assert "demo = demo.main:run" in text      # pyproject script
+    assert "test_x.py" in text
+
+
+def test_filters_secrets_and_generated_dirs(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "ok.py").write_text("x = 1\n", encoding="utf-8")
+    for name in (".venv", "__pycache__", "node_modules", "pkg.egg-info", ".git"):
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "inside.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
+    (tmp_path / "id_rsa").write_text("key\n", encoding="utf-8")
+    (tmp_path / "secret.json").write_text("{}\n", encoding="utf-8")
+
+    text = build_mini_map(tmp_path)
+    assert "ok.py" in text
+    for hidden in (".venv", "__pycache__", "node_modules", "egg-info", ".env", "id_rsa", "secret.json"):
+        assert hidden not in text
+
+
+def test_does_not_read_context_file_contents(tmp_path):
+    (tmp_path / "PROJECT_CONTEXT_full.md").write_text("MARKER_SHOULD_NOT_APPEAR", encoding="utf-8")
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    text = build_mini_map(tmp_path)
+    assert "MARKER_SHOULD_NOT_APPEAR" not in text
+    assert "PROJECT_CONTEXT_full.md" in text  # name only, as a root file entry
+
+
+def test_budget_truncates_whole_lines(tmp_path):
+    for i in range(60):
+        directory = tmp_path / f"pkg{i:02d}"
+        directory.mkdir()
+        for j in range(30):
+            (directory / f"f{j}.py").write_text("x = 1\n", encoding="utf-8")
+
+    text = build_mini_map(tmp_path, max_chars=1200)
+    assert len(text) <= 1300
+    assert "... +" in text and "mục khác" in text
+    assert all(line.strip() for line in text.splitlines())
+    assert "Ghi chú:" in text  # the hint always survives truncation
+
+
+def test_large_project_is_fast_and_small(tmp_path):
+    for i in range(200):
+        directory = tmp_path / "packages" / f"mod{i:03d}"
+        directory.mkdir(parents=True)
+        for j in range(5):
+            (directory / f"f{j}.py").write_text("x = 1\n", encoding="utf-8")
+
+    start = time.perf_counter()
+    text = build_mini_map(tmp_path)
+    assert time.perf_counter() - start < 5
+    assert len(text) <= 3100
+
+
+def test_empty_project_is_safe(tmp_path):
+    text = build_mini_map(tmp_path)
+    assert "chưa thấy file source nào" in text
+
+
+def test_respects_agentignore(tmp_path):
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    (generated / "gen.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "keep.py").write_text("y = 1\n", encoding="utf-8")
+    (tmp_path / ".agentignore").write_text("generated/\n", encoding="utf-8")
+
+    text = build_mini_map(tmp_path)
+    assert "keep.py" in text
+    assert "generated" not in text
+
+
+def test_does_not_touch_the_project(tmp_path):
+    make_project(tmp_path)
+
+    def snapshot():
+        return sorted(
+            (path.relative_to(tmp_path).as_posix(), path.stat().st_mtime_ns)
+            for path in tmp_path.rglob("*")
+        )
+
+    before = snapshot()
+    build_mini_map(tmp_path)
+    build_mini_map(str(tmp_path))
+    assert snapshot() == before
+
+
+def test_env_budget(tmp_path, monkeypatch):
+    make_project(tmp_path)
+    monkeypatch.setenv("HUB_QA_MINIMAP_CHARS", "600")
+    text = build_mini_map(tmp_path)
+    assert len(text) <= 620
+
+```
+
 ### tests/test_platform_features.py  [FULL]
 ```python
 from pathlib import Path
@@ -7366,6 +8966,25 @@ def test_user_memory_is_explicit(tmp_path, monkeypatch):
     assert store.read_user_memory() == ""
     store.append_user_memory("Prefer concise answers")
     assert "Prefer concise answers" in store.read_user_memory()
+
+
+def test_active_project_is_remembered_per_thread(tmp_path):
+    db = tmp_path / "hub.sqlite3"
+    store = MemoryStore(db)
+    store.set_active_project("thread-a", tmp_path)
+    assert MemoryStore(db).get_active_project("thread-a") == str(tmp_path)
+    assert MemoryStore(db).get_active_project("thread-b") is None
+    store.set_active_project("thread-a", None)
+    assert store.get_active_project("thread-a") is None
+
+
+def test_project_memory_lands_where_qa_reads_it(tmp_path):
+    path = MemoryStore.append_project_memory(tmp_path, "QA dùng mini-map")
+    assert path == tmp_path / ".hub" / "project_memory.md"
+    assert MemoryStore.read_project_memory(tmp_path).strip() == "- QA dùng mini-map"
+    MemoryStore.append_project_memory(tmp_path, "chạy pytest -q trong env agent-hub")
+    text = MemoryStore.read_project_memory(tmp_path)
+    assert "mini-map" in text and "pytest -q" in text
 
 
 def test_skill_registry_loads_and_selects(tmp_path):
@@ -7418,7 +9037,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from hub import build_hub
 from hub.agents.base import AgentSpec
 from hub.agents.qa import SPEC as qa_spec
-from hub.agents.qa.node import qa_node, _load_context, _parse_need_file
+from hub.agents.qa.node import qa_node, _parse_need_file
 from hub.agents.qa.tools import read_file_content, read_function
 
 
@@ -7490,8 +9109,8 @@ def test_read_function_not_found(tmp_path):
 # Integration test: QA node with mock LLM
 # ---------------------------------------------------------------------------
 
-def test_qa_node_without_context_reads_project_source(tmp_path, monkeypatch):
-    """PROJECT_CONTEXT is optional; QA can still inspect source files."""
+def test_qa_node_without_context_file_uses_on_the_fly_index(tmp_path, monkeypatch):
+    """QA builds its own index; no PROJECT_CONTEXT file is required or read."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
     (tmp_path / "model.py").write_text("def train():\n    return 'trained'\n", encoding="utf-8")
@@ -7502,40 +9121,40 @@ def test_qa_node_without_context_reads_project_source(tmp_path, monkeypatch):
         result = qa_node({"messages": [HumanMessage("hàm nào xử lý train?")]})
     msg = result["messages"][0].content
     assert "Hàm train" in msg
-    assert "Không có PROJECT_CONTEXT" in msg
+    assert "🗂️" in msg
+    assert "Không có PROJECT_CONTEXT" not in msg
+    sent = "\n".join(m.content for m in mock_llm.invoke.call_args[0][0])
+    assert "model.py" in sent and "CHỈ MỤC DỰ ÁN" in sent
 
 
-def test_qa_node_with_context_answers(tmp_path, monkeypatch):
-    """QA agent should call LLM and return an answer when context exists."""
+def test_qa_node_index_replaces_project_context(tmp_path, monkeypatch):
+    """An existing (possibly stale) PROJECT_CONTEXT.md is not loaded automatically."""
     monkeypatch.chdir(tmp_path)
-
-    # Create a fake PROJECT_CONTEXT.md
-    context = "# PROJECT CONTEXT: MyProject\n## Structure\n├── model.py\n## Skeleton\ndef train(): ...\n"
-    (tmp_path / "PROJECT_CONTEXT.md").write_text(context, encoding="utf-8")
-
-    # Mock the LLM
-    mock_response = MagicMock()
-    mock_response.content = "Hàm `train()` nằm ở `model.py:L1` dùng để huấn luyện model."
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
+    (tmp_path / "model.py").write_text("def train():\n    return 'trained'\n", encoding="utf-8")
+    (tmp_path / "PROJECT_CONTEXT.md").write_text("STALE_MARKER=1", encoding="utf-8")
 
     mock_llm = MagicMock()
-    mock_llm.invoke.return_value = mock_response
-
+    mock_llm.invoke.return_value = MagicMock(
+        content="Hàm `train()` nằm ở `model.py:L1` dùng để huấn luyện model."
+    )
     with patch("hub.agents.qa.node.get_llm", return_value=mock_llm):
-        state = {"messages": [HumanMessage("hàm nào để train model?")]}
-        result = qa_node(state)
+        result = qa_node({"messages": [HumanMessage("hàm nào để train model?")]})
 
     msg = result["messages"][0].content
     assert "train()" in msg
-    assert "PROJECT_CONTEXT.md" in msg  # source citation
+    assert "🗂️" in msg
+    sent = "\n".join(m.content for m in mock_llm.invoke.call_args[0][0])
+    assert "STALE_MARKER" not in sent
+    assert "model.py" in sent
 
 
 def test_qa_node_fetches_extra_code(tmp_path, monkeypatch):
     """QA agent should fetch extra code when LLM requests it."""
     monkeypatch.chdir(tmp_path)
 
-    # Create PROJECT_CONTEXT.md with a root reference
-    context = f"# PROJECT CONTEXT: TestProj\nRoot: {tmp_path}\n## Files\n├── math_utils.py\n"
-    (tmp_path / "PROJECT_CONTEXT.md").write_text(context, encoding="utf-8")
+    # The project only needs a marker file; QA builds the index itself.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     (tmp_path / "math_utils.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
 
     # First call: LLM says it needs more code
@@ -7565,6 +9184,122 @@ def test_qa_spec_registered():
     names = [a.name for a in AGENTS]
     assert "qa" in names
     assert "context" in names
+
+```
+
+### tests/test_qa_history.py  [FULL]
+```python
+"""Tests for the QA conversation memory (verbatim + digest + budget)."""
+from langchain_core.messages import AIMessage, HumanMessage
+
+from hub.agents.qa.history import digest_answer, history_messages, render_history
+
+
+def turn(question, answer, agent="qa"):
+    return [HumanMessage(question), AIMessage(answer, name=agent)]
+
+
+def conversation(turns, current="câu hỏi mới"):
+    messages = []
+    for item in turns:
+        question, answer, agent = item if len(item) == 3 else (*item, "qa")
+        messages += turn(question, answer, agent)
+    messages.append(HumanMessage(current))
+    return {"messages": messages}
+
+
+def test_newest_turns_are_verbatim_and_older_ones_digested():
+    long_answer = "Giải thích chi tiết: " + ("nội dung quan trọng " * 120) + "`src/model.py:L10`"
+    old = [("q cũ", "câu trả lời cũ " * 40) for _ in range(4)]
+    messages = turn("hỏi 1", long_answer) + turn("hỏi 2", long_answer)
+    state = conversation(old + [("hỏi 1", long_answer), ("hỏi 2", long_answer)])
+
+    text = render_history(state)
+    # Two newest answers survive at (near) full length, older ones are compressed.
+    assert text.count("nội dung quan trọng") > 40
+    assert text.count("câu trả lời cũ") < 200
+    assert "--- HẾT LỊCH SỬ ---" in text
+
+
+def test_digest_keeps_citations_and_collapses_code():
+    answer = (
+        "Đã sửa logic.\n\n```python\n"
+        + "\n".join(f"line_{i} = {i}" for i in range(12))
+        + "\n```\nXem `src/hub/cli.py:L42` và commit 1234567."
+    )
+    digest = digest_answer(answer, 400)
+    assert "src/hub/cli.py:L42" in digest
+    assert "[code 12 dòng]" in digest
+    assert "line_7" not in digest
+
+
+def test_footer_is_never_forwarded():
+    answer = "Kết quả đúng.\n\n---\n📂 Project: `C:/x`\ncode bổ sung đã đọc: a.py"
+    state = conversation([("hỏi", answer)])
+    text = render_history(state)
+    assert "Kết quả đúng." in text
+    assert "📂 Project" not in text and "code bổ sung" not in text
+
+
+def test_turns_from_other_agents_are_labelled():
+    state = conversation([
+        ("q1", "report của code agent", "code"),
+        ("q2", "giải thích của qa", "qa"),
+    ])
+    text = render_history(state)
+    assert "[code] report của code agent" in text
+    assert "[qa] giải thích của qa" in text
+
+
+def test_current_question_is_not_part_of_history():
+    state = conversation([("q1", "a1")], current="CHỈ_CÂU_HỎI_MỚI")
+    text = render_history(state)
+    assert "q1" in text
+    assert "CHỈ_CÂU_HỎI_MỚI" not in text
+
+
+def test_no_past_turns_means_no_block():
+    assert render_history({"messages": [HumanMessage("chỉ có câu này")]}) == ""
+    assert history_messages({"messages": [HumanMessage("chỉ có câu này")]}) == []
+
+
+def test_total_budget_is_respected():
+    turns = [(f"câu hỏi số {i}", "nội dung trả lời " * 200) for i in range(40)]
+    text = render_history(conversation(turns))
+    assert len(text) <= 8000
+    assert "lượt cũ hơn đã lược bớt" in text
+    assert "câu hỏi số 39" in text        # newest survives
+
+
+def test_budget_env_is_honoured(monkeypatch):
+    turns = [(f"q{i}", "a" * 900) for i in range(30)]
+    monkeypatch.setenv("HUB_QA_HISTORY_CHARS", "2000")
+    text = render_history(conversation(turns))
+    assert len(text) <= 2100
+    # Degrades to the compact form instead of blowing the budget.
+    assert "lượt cũ hơn đã lược bớt" in text
+
+
+def test_turn_cap_env(monkeypatch):
+    monkeypatch.setenv("HUB_QA_HISTORY_TURNS", "3")
+    turns = [(f"q{i}", f"a{i}") for i in range(10)]
+    text = render_history(conversation(turns))
+    assert "q9" in text and "q7" in text
+    assert "q6" not in text
+
+
+def test_zero_verbatim_turns_still_works(monkeypatch):
+    monkeypatch.setenv("HUB_QA_VERBATIM_TURNS", "0")
+    state = conversation([("q1", "một câu trả lời dài " * 60)])
+    text = render_history(state)
+    assert "q1" in text and len(text) < 3000
+
+
+def test_long_verbatim_answer_is_capped():
+    state = conversation([("q", "X" * 20000)])
+    text = render_history(state, total_chars=3000)
+    assert len(text) <= 3100
+    assert "cắt bớt" in text or "…" in text
 
 ```
 
@@ -7664,12 +9399,12 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage, HumanMessage
-from hub.agents.qa.node import qa_node, _history, _load_context_with_path
+from hub.agents.qa.node import _history, qa_node
 import time, os
 
 def mk(tmp, root_text=None):
-    ctx = f'# Project context: P\n> Root: `{root_text or tmp}`\n## Files\n'
-    (tmp / 'PROJECT_CONTEXT_map.md').write_text(ctx, encoding='utf-8')
+    """Minimal project marker; QA builds its own index, no context file needed."""
+    (tmp / 'pyproject.toml').write_text("[project]\nname='demo'\n", encoding='utf-8')
 
 def llm_with(*contents):
     m = MagicMock(); m.invoke.side_effect = [MagicMock(content=c) for c in contents]; return m
@@ -7684,12 +9419,13 @@ def test_history_used_and_footer_stripped(tmp_path, monkeypatch):
     with patch('hub.agents.qa.node.get_llm', return_value=llm):
         out = qa_node(state)
     sent = llm.invoke.call_args[0][0]
-    texts = [m.content for m in sent]
-    assert any('hàm train là gì?' in t for t in texts)
-    assert any(t == 'Là `train()` ở model.py' for t in texts)          # footer đã bị bỏ
-    assert not any('Đã tạo file' in t for t in texts)                    # agent khác không lẫn vào
-    assert texts[-1] == 'Câu hỏi: còn hàm kia?'
-    assert out['messages'][0].name == 'qa' and 'PROJECT_CONTEXT_map.md' in out['messages'][0].content
+    blob = '\n'.join(m.content for m in sent)
+    assert 'hàm train là gì?' in blob                      # lượt cũ được nhớ
+    assert 'Là `train()` ở model.py' in blob               # footer đã bị bỏ
+    assert '📄 Nguồn' not in blob
+    assert '[hub] Đã tạo file' in blob                     # lượt của agent khác cũng vào history, có nhãn
+    assert sent[-1].content == 'Câu hỏi: còn hàm kia?'
+    assert out['messages'][0].name == 'qa' and '🗂️' in out['messages'][0].content
 
 def test_history_limit(tmp_path):
     msgs = []
@@ -7697,13 +9433,21 @@ def test_history_limit(tmp_path):
         msgs += [HumanMessage(f'q{i}'), AIMessage(f'a{i}', name='qa')]
     msgs.append(HumanMessage('now'))
     h = _history({'messages': msgs}, max_turns=2)
-    assert [m.content for m in h] == ['Câu hỏi: q4', 'a4', 'Câu hỏi: q5', 'a5']
+    text = '\n'.join(m.content for m in h)
+    assert 'q4' in text and 'q5' in text
+    assert 'q3' not in text                                 # ngoài cửa sổ
+    assert '4 lượt cũ hơn đã lược bớt' in text
 
-def test_newest_context_file_wins(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / 'PROJECT_CONTEXT.md').write_text('old'); time.sleep(0.05)
-    (tmp_path / 'PROJECT_CONTEXT_full.md').write_text('new')
-    assert _load_context_with_path(tmp_path)[1].name == 'PROJECT_CONTEXT_full.md'
+def test_project_context_files_are_not_auto_loaded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); mk(tmp_path)
+    (tmp_path / 'PROJECT_CONTEXT_full.md').write_text('STALE_MARKER_42', encoding='utf-8')
+    (tmp_path / 'app.py').write_text('VALUE = 1\n', encoding='utf-8')
+    llm = llm_with('ok')
+    with patch('hub.agents.qa.node.get_llm', return_value=llm):
+        qa_node({'messages': [HumanMessage('hỏi')]})
+    sent = '\n'.join(m.content for m in llm.invoke.call_args[0][0])
+    assert 'STALE_MARKER_42' not in sent
+    assert 'app.py' in sent
 
 def test_read_range_and_js_function(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path); mk(tmp_path)
@@ -7759,86 +9503,33 @@ def test_no_context_still_uses_source(tmp_path, monkeypatch):
     with patch('hub.agents.qa.node.get_llm', return_value=llm):
         out = qa_node({'messages': [HumanMessage('giá trị VALUE là gì?')]})
     assert out['messages'][0].content.startswith('đã đọc source')
-    assert 'Không có PROJECT_CONTEXT' in out['messages'][0].content
+    assert '🗂️' in out['messages'][0].content
+    assert 'Không có PROJECT_CONTEXT' not in out['messages'][0].content
 
 
-def test_initial_context_omits_full_source_but_keeps_file_index():
-    from hub.agents.qa.node import _compact_project_context
+def test_initial_index_keeps_only_navigation_data(tmp_path, monkeypatch):
+    """The prompt carries the index, never full code bodies."""
+    from hub.mini_map import build_mini_map
 
-    context = (
-        "# Project context\n## 1. Overview\nimportant overview\n"
-        "### src/main.py  [FULL]\n```python\nSECRET_FULL_BODY = 123\n```\n"
-        "### src/model.py  [SKELETON]\n```text\ndef predict()  # L10\n```\n"
-    )
-    compact = _compact_project_context(context, max_chars=10000)
-    assert "important overview" in compact
-    assert "src/main.py" in compact and "src/model.py" in compact
-    assert "SECRET_FULL_BODY" not in compact
-    assert "retrieve this file" in compact
+    (tmp_path / 'pyproject.toml').write_text("[project]\nname='demo'\n", encoding='utf-8')
+    (tmp_path / 'main.py').write_text('SECRET_FULL_BODY = 123\n', encoding='utf-8')
+    text = build_mini_map(tmp_path)
+    assert 'main.py' in text
+    assert 'SECRET_FULL_BODY' not in text
 
 ```
 
 ### tests/test_research_agent.py  [FULL]
 ```python
-from unittest.mock import Mock
-
-from hub.agents.research.controller.decision_engine import LayaDecisionEngine
-from hub.agents.research.controller.policy import choose_action
-from hub.agents.research.controller.pipeline import ResearchPipeline
-from hub.agents.research.processors.deduplicate import deduplicate
+from hub.agents.research.processors.deduplicate import (
+    content_fingerprint,
+    deduplicate,
+    independent_source_count,
+    same_story,
+)
 from hub.agents.research.ranking.engine import rank_articles
-from hub.agents.research.state import Article, ResearchState
+from hub.agents.research.state import Article
 from hub.agents.research.collectors.fetch import validate_public_url
-
-
-def test_laya_adapter_uses_typed_choice_without_gemini():
-    router = Mock()
-    router.predict.return_value = {
-        "answers": {"next_action": {"choice": "FETCH_NEXT", "confidence": 0.81}}
-    }
-    engine = LayaDecisionEngine(router=router)
-    action, confidence = engine.choose_action({"query": "AI news"})
-    assert action == "FETCH_NEXT"
-    assert confidence == 0.81
-    router.predict.assert_called_once()
-
-
-def test_laya_scores_multiple_articles_in_one_predict_call():
-    router = Mock()
-    router.predict.return_value = {
-        "answers": {
-            "article_0": {"score": 4.0},
-            "article_1": {"score": 2.0},
-        }
-    }
-    engine = LayaDecisionEngine(router=router)
-    scores = engine.score_articles([
-        {"url": "https://a.test", "title": "A"},
-        {"url": "https://b.test", "title": "B"},
-    ])
-    assert scores == {"https://a.test": 100.0, "https://b.test": 50.0}
-    router.predict.assert_called_once()
-
-
-def test_shadow_policy_logs_laya_but_uses_safe_python_policy():
-    state = ResearchState(query="AI", pending_urls=[{"url": "https://example.com"}], max_pages=2)
-    engine = Mock()
-    engine._unavailable = False
-    engine.choose_action.return_value = ("STOP", 0.99)
-    action, prediction = choose_action(state, engine, mode="shadow")
-    assert action == "FETCH_NEXT"
-    assert prediction == "STOP"
-    assert state.actions
-
-
-def test_active_policy_cannot_fetch_when_budget_exhausted():
-    state = ResearchState(query="AI", pending_urls=[{"url": "https://example.com"}],
-                          fetched_count=1, max_pages=1)
-    engine = Mock()
-    engine._unavailable = False
-    engine.choose_action.return_value = ("FETCH_NEXT", 0.99)
-    action, _ = choose_action(state, engine, mode="active")
-    assert action == "STOP"
 
 
 def test_deduplicate_removes_tracking_and_near_duplicate_titles():
@@ -7864,6 +9555,15 @@ def test_ranking_is_deterministic_and_exposes_heuristic_score():
     assert all(0 <= item.final_score <= 100 for item in ranked)
 
 
+def test_relevance_beats_a_fresher_off_topic_article():
+    on_topic = Article(url="https://reuters.com/a", title="OpenAI releases new model",
+                       published_at="2026-11-18T10:00:00+00:00", content="model " * 400)
+    off_topic = Article(url="https://example.com/b", title="Local football results",
+                        published_at="2026-11-19T09:00:00+00:00", content="football " * 400)
+    ranked = rank_articles([on_topic, off_topic], terms=["openai", "model"])
+    assert ranked[0].url == "https://reuters.com/a"
+
+
 def test_localhost_fetch_is_blocked_before_dns():
     try:
         validate_public_url("http://localhost/admin")
@@ -7873,35 +9573,15 @@ def test_localhost_fetch_is_blocked_before_dns():
         raise AssertionError("localhost must be blocked")
 
 
-class FakeSearcher:
-    def __init__(self):
-        self.calls = 0
-
-    def search(self, query):
-        self.calls += 1
-        if self.calls == 1:
-            return [
-                {"url": "https://reuters.com/a", "title": "AI company releases new model", "snippet": "Launch"},
-                {"url": "https://bbc.com/b", "title": "AI company releases new model", "snippet": "Details"},
-                {"url": "https://example.org/c", "title": "A different technology story", "snippet": "News"},
-            ]
-        return []
-
-
-def test_pipeline_runs_without_laya_or_gemini(monkeypatch):
-    monkeypatch.setenv("HUB_RESEARCH_LAYA_MODE", "off")
-    searcher = FakeSearcher()
-    pipeline = ResearchPipeline(searcher=searcher,
-                                fetcher=lambda url: ("article body " * 100, url))
-    pipeline.max_rounds = 1
-    pipeline.max_pages = 2
-    state, ranked = pipeline.run("AI news today")
-    assert state.fetched_count == 2
-    assert len(ranked) == 2
-    assert searcher.calls == 1
-    assert all(item.final_score >= 0 for item in ranked)
-    assert any("bbc.com" in item.corroborating_sources for item in ranked)
-
+def test_same_story_and_fingerprint_helpers():
+    assert same_story("OpenAI announces new model", "OpenAI announces a new model")
+    left = Article(url="https://a.com/x", title="T", content="ban tin " * 200)
+    right = Article(url="https://b.com/x", title="T", content="ban tin " * 200)
+    left.fingerprint = content_fingerprint(left.content)
+    right.fingerprint = content_fingerprint(right.content)
+    assert left.fingerprint and left.fingerprint == right.fingerprint
+    # A syndicated copy must not count as a second independent source.
+    assert independent_source_count([left, right]) == 1
 
 
 def test_fetch_retries_rate_limit_then_succeeds(monkeypatch):
@@ -8012,6 +9692,17 @@ def test_fetch_article_uses_browser_for_thin_js_page(monkeypatch):
     assert final_url.endswith("/article")
 
 
+def test_extract_published_prefers_json_ld_then_meta():
+    from hub.agents.research.collectors.fetch import extract_published
+
+    json_ld = ('<script type="application/ld+json">'
+               '{"@type":"NewsArticle","datePublished":"2026-11-19T08:30:00Z"}'
+               '</script>')
+    assert extract_published(json_ld).startswith("2026-11-19T08:30:00")
+    meta = '<meta property="article:published_time" content="2026-11-18T10:00:00+00:00">'
+    assert extract_published(meta).startswith("2026-11-18T10:00:00")
+
+
 def test_extract_text_rejects_captcha_or_cloudflare_challenge():
     from hub.agents.research.collectors.fetch import FetchError, extract_text
 
@@ -8021,6 +9712,520 @@ def test_extract_text_rejects_captcha_or_cloudflare_challenge():
         assert exc.category == "access_challenge"
     else:
         raise AssertionError("anti-bot challenge pages must not be treated as article text")
+
+```
+
+### tests/test_research_pipeline.py  [FULL]
+```python
+from hub.agents.research.controller.pipeline import ResearchPipeline
+from hub.agents.research.controller.planner import ResearchPlan
+from hub.agents.research.controller.policy import evidence_sufficient
+from hub.agents.research.processors.deduplicate import independent_source_count
+from hub.agents.research.processors.synthesize import ArticleSummarizer
+from hub.agents.research.state import Article, ResearchState
+
+
+class FakePlanner:
+    def __init__(self, queries, intent="digest", domains=None, recency_days=7):
+        self._plan = ResearchPlan(queries=list(queries), intent=intent,
+                                  domains=list(domains or []), recency_days=recency_days,
+                                  origin="test")
+
+    def plan(self, _query):
+        return self._plan
+
+
+class FakeSearcher:
+    def __init__(self, batches):
+        self.batches = [list(batch) for batch in batches]
+        self.calls = []
+        self.errors = []
+
+    def search(self, query):
+        self.calls.append(query)
+        return self.batches.pop(0) if self.batches else []
+
+
+class FakeFetcher:
+    def __init__(self, error_urls=(), fixed_content=None):
+        self.error_urls = set(error_urls)
+        self.fixed_content = fixed_content
+        self.urls = []
+
+    def __call__(self, url):
+        self.urls.append(url)
+        if url in self.error_urls:
+            raise RuntimeError("network down")
+        body = self.fixed_content or f"{url} nội dung bài viết chi tiết. " * 40
+        return body, url, "2026-11-19T08:00:00+00:00"
+
+
+def _row(url, title, published="2026-11-19T07:00:00+00:00"):
+    return {"url": url, "title": title, "snippet": title, "published_at": published}
+
+
+def _pipeline(searcher, fetcher, planner, **overrides):
+    pipeline = ResearchPipeline(
+        searcher=searcher,
+        fetcher=fetcher,
+        planner=planner,
+        summarizer=ArticleSummarizer(enabled=False),
+    )
+    pipeline.workers = 1
+    for key, value in overrides.items():
+        setattr(pipeline, key, value)
+    return pipeline
+
+
+def test_digest_rounds_until_five_distinct_stories_from_two_domains():
+    rows = [
+        _row("https://a.com/1", "Story one about chips"),
+        _row("https://b.com/1", "Story two about phones"),
+        _row("https://a.com/2", "Story three about robots"),
+        _row("https://b.com/2", "Story four about batteries"),
+        _row("https://c.com/1", "Story five about satellites"),
+        _row("https://c.com/2", "Story six about software"),
+    ]
+    searcher = FakeSearcher([rows, []])
+    fetcher = FakeFetcher()
+    pipeline = _pipeline(searcher, fetcher,
+                         FakePlanner(["q1", "q2", "q3"]),
+                         min_items=5, max_pages=6, pages_per_round=4, max_search_rounds=3)
+
+    state, items, _dropped = pipeline.run("tin hot hôm nay")
+
+    assert state.fetched_count == 6
+    assert len(state.articles) == 6
+    assert len(set(fetcher.urls)) == 6          # never fetches the same URL twice
+    assert state.search_rounds == 2
+    assert "đủ" in state.stop_reason and "domain" in state.stop_reason
+    assert items                               # extractive fallback still produces items
+
+
+def test_verify_rounds_until_two_independent_sources():
+    rows = [
+        _row("https://reuters.com/x", "OpenAI releases GPT-6 model"),
+        _row("https://bbc.com/x", "OpenAI releases GPT-6 model"),
+    ]
+    searcher = FakeSearcher([rows])
+    fetcher = FakeFetcher()
+    pipeline = _pipeline(searcher, fetcher,
+                         FakePlanner(["claim check"], intent="verify"),
+                         max_pages=4, pages_per_round=4, max_search_rounds=3)
+
+    state, _items, _dropped = pipeline.run("Có đúng OpenAI vừa ra mắt GPT-6?")
+
+    assert state.fetched_count == 2
+    assert "nguồn độc lập" in state.stop_reason
+    assert state.evidence_level == "corroborated"
+    assert len(searcher.calls) >= 2
+    assert searcher.calls[1].startswith('"')
+
+
+def test_syndicated_copy_is_not_counted_as_a_second_source():
+    rows = [
+        _row("https://reuters.com/x", "OpenAI releases GPT-6 model"),
+        _row("https://vietnamnet.vn/x", "OpenAI releases GPT-6 model"),
+    ]
+    searcher = FakeSearcher([rows, []])
+    fetcher = FakeFetcher(fixed_content="bản tin gốc " * 100)
+    pipeline = _pipeline(searcher, fetcher,
+                         FakePlanner(["claim check"], intent="verify"),
+                         max_pages=4, pages_per_round=4, max_search_rounds=3)
+
+    state, _items, _dropped = pipeline.run("Có đúng OpenAI vừa ra mắt GPT-6?")
+
+    assert state.fetched_count == 2
+    assert independent_source_count(state.articles) == 1
+    assert state.evidence_level == "single_source"
+    assert "hết truy vấn" in state.stop_reason
+
+
+def test_page_budget_limits_fetching():
+    rows = [_row(f"https://a.com/{index}", f"Unique topic {index} marker{index}") for index in range(10)]
+    searcher = FakeSearcher([rows])
+    fetcher = FakeFetcher()
+    pipeline = _pipeline(searcher, fetcher,
+                         FakePlanner(["q1", "q2", "q3"]),
+                         min_items=10, max_pages=4, pages_per_round=4,
+                         max_search_rounds=3, max_per_domain=10)
+
+    state, _items, _dropped = pipeline.run("tin hot hôm nay")
+
+    assert state.fetched_count == 4
+    assert len(fetcher.urls) == 4
+    assert len(searcher.calls) == 1
+    assert "đủ 4 trang" in state.stop_reason
+
+
+def test_deadline_stops_before_any_fetch():
+    searcher = FakeSearcher([[_row("https://a.com/1", "Story one")]])
+    fetcher = FakeFetcher()
+    pipeline = _pipeline(searcher, fetcher, FakePlanner(["q1"]))
+    pipeline.deadline_seconds = 0
+
+    state, items, _dropped = pipeline.run("tin hot hôm nay")
+
+    assert state.fetched_count == 0
+    assert items == []
+    assert "hết thời gian" in state.stop_reason
+
+
+def test_legacy_laya_env_is_reported_as_obsolete(monkeypatch):
+    monkeypatch.setenv("HUB_RESEARCH_LAYA_MODE", "shadow")
+    pipeline = _pipeline(FakeSearcher([]), FakeFetcher(), FakePlanner(["q1"]))
+    pipeline.deadline_seconds = 0
+
+    state, _items, _dropped = pipeline.run("tin hot hôm nay")
+
+    assert any("đã bỏ" in warning for warning in state.warnings)
+
+
+def test_fetch_error_is_recorded_but_does_not_kill_the_round():
+    rows = [
+        _row("https://a.com/broken", "Broken story about chips"),
+        _row("https://b.com/fine", "Working story about phones"),
+    ]
+    searcher = FakeSearcher([rows, []])
+    fetcher = FakeFetcher(error_urls={"https://a.com/broken"})
+    pipeline = _pipeline(searcher, fetcher,
+                         FakePlanner(["q1", "q2"]),
+                         max_pages=2, pages_per_round=2, max_search_rounds=2)
+
+    state, _items, _dropped = pipeline.run("tin hot hôm nay")
+
+    assert state.fetched_count == 2
+    assert any("Tải lỗi" in warning for warning in state.warnings)
+    assert any(article.fetch_error for article in state.articles)
+
+
+def _article(title, source, content=None, fingerprint=None, url=None):
+    article = Article(url=url or f"https://{source}/{title.replace(' ', '-')}",
+                      title=title, source=source, content=content or "nội dung " * 60)
+    article.fingerprint = fingerprint
+    return article
+
+
+def test_digest_evidence_requires_five_stories():
+    state = ResearchState(query="q", intent="digest", min_items=5,
+                          articles=[_article(f"Unique topic {i} marker{i}", ["a.com", "b.com"][i % 2])
+                                    for i in range(4)])
+    assert evidence_sufficient(state)[0] is False
+    state.articles.append(_article("Unique topic five marker5", "a.com"))
+    assert evidence_sufficient(state)[0] is True
+
+
+def test_verify_evidence_ignores_identical_fingerprints():
+    first = _article("OpenAI releases GPT-6", "reuters.com", fingerprint="same")
+    second = _article("OpenAI releases GPT-6", "vietnamnet.vn", fingerprint="same")
+    same_copy = ResearchState(query="q", intent="verify", articles=[first, second])
+    assert evidence_sufficient(same_copy)[0] is False
+
+    second.fingerprint = "different"
+    independent = ResearchState(query="q", intent="verify", articles=[first, second])
+    assert evidence_sufficient(independent)[0] is True
+
+```
+
+### tests/test_research_planner.py  [FULL]
+```python
+from types import SimpleNamespace
+
+from hub.agents.research.controller.planner import (
+    ResearchPlanner,
+    build_prompt,
+    fallback_plan,
+    llm_enabled,
+)
+
+
+class FakeLLM:
+    def __init__(self, payload=None, error=None):
+        self.payload = payload
+        self.error = error
+        self.prompts = []
+
+    def invoke(self, prompt):
+        self.prompts.append(prompt)
+        if self.error:
+            raise self.error
+        return SimpleNamespace(content=self.payload)
+
+
+def _planner(fake, enabled=True):
+    seen = []
+
+    def factory(agent):
+        seen.append(agent)
+        return fake
+
+    return ResearchPlanner(llm_factory=factory, enabled=enabled), seen
+
+
+def test_valid_llm_json_is_validated_and_cleaned():
+    fake = FakeLLM(
+        '```json\n{"intent": "verify", "queries": ["OpenAI ra mắt GPT-6", '
+        '"GPT-6 xác nhận chính thức", "query 3", "query 4"], '
+        '"domains": ["vnexpress.net", "evil.example", "reuters.com"], '
+        '"recency_days": 99, "language": "vi"}\n```'
+    )
+    planner, seen = _planner(fake)
+    plan = planner.plan("Có đúng OpenAI vừa ra mắt GPT-6 không?")
+
+    assert seen == ["research"]
+    assert plan.origin == "llm"
+    assert plan.intent == "verify"
+    assert len(plan.queries) == 3
+    assert plan.domains == ["vnexpress.net", "reuters.com"]
+    assert plan.recency_days == 30          # clamped to 1-30
+    assert fake.prompts
+
+
+def test_invalid_json_falls_back_without_crashing():
+    fake = FakeLLM("đây không phải JSON")
+    planner, _ = _planner(fake)
+    plan = planner.plan("tin hot hôm nay")
+
+    assert plan.origin == "fallback"
+    assert plan.intent == "digest"
+    assert plan.queries[0] == "tin hot hôm nay"
+    assert len(plan.queries) <= 3
+    assert "LLM plan lỗi" in plan.note
+
+
+def test_llm_exception_falls_back_to_deterministic_plan():
+    planner, _ = _planner(FakeLLM(error=RuntimeError("quota exhausted")))
+    plan = planner.plan("giá vàng hôm nay")
+
+    assert plan.origin == "fallback"
+    assert plan.queries[0] == "giá vàng hôm nay"
+    assert any("mới nhất" in query for query in plan.queries)
+
+
+def test_disabled_llm_never_calls_the_model():
+    fake = FakeLLM('{"queries": ["should not happen"]}')
+    planner, seen = _planner(fake, enabled=False)
+    plan = planner.plan("tin hot hôm nay")
+
+    assert plan.origin == "fallback"
+    assert seen == []
+    assert fake.prompts == []
+
+
+def test_prompt_contains_today_and_only_approved_domains():
+    prompt = build_prompt("tin công nghệ", today="2026-11-19")
+    assert "2026-11-19" in prompt
+    assert "vnexpress.net" in prompt
+    assert "JSON" in prompt
+
+
+def test_fallback_plan_deduplicates_variants():
+    plan = fallback_plan("trí tuệ nhân tạo")
+    assert len(plan.queries) == len({query.casefold() for query in plan.queries})
+
+
+def test_llm_enabled_reads_env(monkeypatch):
+    monkeypatch.delenv("HUB_RESEARCH_LLM", raising=False)
+    assert llm_enabled() is True
+    monkeypatch.setenv("HUB_RESEARCH_LLM", "false")
+    assert llm_enabled() is False
+    assert llm_enabled(True) is True
+
+```
+
+### tests/test_research_search.py  [FULL]
+```python
+import pytest
+
+from hub.agents.research.collectors.search import (
+    WebSearchClient,
+    _merge,
+    _parse_rss,
+)
+
+RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>Tin A - VnExpress</title>
+    <link>https://news.google.com/rss/articles/abc?oc=5</link>
+    <pubDate>Wed, 19 Nov 2026 08:00:00 GMT</pubDate>
+    <description>&lt;a href="https://vnexpress.net/a"&gt;Tin A&lt;/a&gt;</description>
+    <source url="https://vnexpress.net">VnExpress</source>
+  </item>
+  <item>
+    <title>Tin B</title>
+    <link>https://news.google.com/rss/articles/def</link>
+    <description>Tin B</description>
+  </item>
+</channel></rss>"""
+
+
+def test_parse_rss_returns_rows_and_strips_publisher_suffix():
+    rows = _parse_rss(RSS)
+    assert len(rows) == 2
+    assert rows[0]["title"] == "Tin A"
+    assert rows[0]["url"] == "https://news.google.com/rss/articles/abc?oc=5"
+    assert rows[0]["published_at"].startswith("2026-11-19T08:00:00")
+    assert rows[0]["backend"] == "rss"
+    assert rows[0]["publisher_url"] == "https://vnexpress.net"
+    assert rows[1]["published_at"] is None
+
+
+def test_parse_rss_rejects_malformed_xml():
+    with pytest.raises(ValueError):
+        _parse_rss(b"<rss><channel>")
+
+
+def test_merge_deduplicates_urls_and_titles_across_backends():
+    rows = [
+        {"url": "https://a.com/story?utm_source=x", "title": "OpenAI announces new model"},
+        {"url": "https://a.com/story", "title": "OpenAI announces new model", "backend": "rss"},
+        {"url": "https://b.com/other", "title": "OpenAI announces new model"},
+    ]
+    merged = _merge(rows)
+    assert len(merged) == 1
+    assert merged[0]["url"] == "https://a.com/story"
+
+
+def test_client_uses_rss_backend_without_network():
+    client = WebSearchClient(backends=["rss"], rss_fetcher=lambda url, params: RSS)
+    rows = client.search("tin hot")
+    assert len(rows) == 2
+    assert client.errors == []
+
+
+def test_client_records_backend_error_and_returns_empty_list():
+    def boom(_url, _params):
+        raise RuntimeError("blocked")
+
+    client = WebSearchClient(backends=["rss"], rss_fetcher=boom)
+    assert client.search("tin hot") == []
+    assert client.errors and "rss" in client.errors[0]
+
+
+def test_client_ignores_unknown_backends():
+    client = WebSearchClient(backends=["nope"], rss_fetcher=lambda *_: RSS)
+    assert client.backends == ["ddgs"]
+
+```
+
+### tests/test_research_summary.py  [FULL]
+```python
+import json
+from types import SimpleNamespace
+
+from hub.agents.research.controller.planner import ResearchPlan
+from hub.agents.research.processors.synthesize import (
+    ArticleSummarizer,
+    SummaryItem,
+    first_sentences,
+)
+from hub.agents.research.reporting.formatter import format_report
+from hub.agents.research.state import Article, ResearchState
+
+
+class FakeLLM:
+    def __init__(self, payload=None, error=None):
+        self.payload = payload
+        self.error = error
+        self.calls = 0
+
+    def invoke(self, _prompt):
+        self.calls += 1
+        if self.error:
+            raise self.error
+        return SimpleNamespace(content=self.payload)
+
+
+def _articles(count=6):
+    return [
+        Article(url=f"https://news{index}.com/story-{index}",
+                title=f"Unique topic {index} marker{index}",
+                source=f"news{index}.com",
+                content=f"Đây là nội dung của bài số {index}. " * 30,
+                published_at="2026-11-19T08:00:00+00:00")
+        for index in range(count)
+    ]
+
+
+def _summary(url, text="Tóm tắt đủ dài để vượt qua kiểm tra tối thiểu của bộ lọc nội dung."):
+    return {"url": url, "headline": "Headline", "summary": text,
+            "why": "nguồn rõ ràng", "confidence": "high"}
+
+
+def test_unknown_urls_are_dropped_and_items_capped_at_five():
+    articles = _articles(6)
+    payload = {"items": [_summary("https://evil.example/fake")] +
+                         [_summary(article.url) for article in articles],
+               "dropped": []}
+    fake = FakeLLM(json.dumps(payload))
+    summarizer = ArticleSummarizer(llm_factory=lambda _agent: fake, enabled=True, top_items=5)
+
+    items, dropped = summarizer.summarize("tin hot", articles)
+
+    assert len(items) == 5
+    assert all(item.url.startswith("https://news") for item in items)
+    assert any(entry["reason"] == "unknown-url" for entry in dropped)
+
+
+def test_llm_failure_falls_back_to_whole_sentences():
+    articles = _articles(2)
+    articles[0].content = ("Câu đầu tiên đầy đủ. Câu thứ hai cũng đầy đủ. "
+                           "Câu thứ ba không cần. " * 5)
+    fake = FakeLLM(error=RuntimeError("quota"))
+    summarizer = ArticleSummarizer(llm_factory=lambda _agent: fake, enabled=True)
+
+    items, dropped = summarizer.summarize("tin hot", articles)
+
+    assert dropped == []
+    assert items
+    assert "Câu đầu tiên" in items[0].summary
+    assert "Câu thứ hai" in items[0].summary
+    assert "Câu thứ ba" not in items[0].summary
+
+
+def test_disabled_llm_makes_zero_model_calls():
+    def factory(_agent):
+        raise AssertionError("the model must not be called when disabled")
+
+    summarizer = ArticleSummarizer(llm_factory=factory, enabled=False)
+    items, _dropped = summarizer.summarize("tin hot", _articles(2))
+    assert items
+    assert all(item.summary for item in items)
+
+
+def test_same_story_is_summarised_once():
+    articles = _articles(2)
+    articles[1].title = articles[0].title
+    summarizer = ArticleSummarizer(enabled=False)
+    items, _dropped = summarizer.summarize("tin hot", articles)
+    assert len(items) == 1
+
+
+def test_first_sentences_never_cuts_mid_word():
+    text = ("một " * 400).strip() + " kết thúc"
+    result = first_sentences(text, count=2, max_chars=200)
+    assert len(result) <= 220
+    assert result.endswith("…")
+    assert not result.endswith("mộ…")
+
+
+def test_report_stays_within_budget_and_reports_filtering(monkeypatch):
+    monkeypatch.setenv("HUB_RESEARCH_REPORT_CHARS", "800")
+    state = ResearchState(query="tin hot hôm nay",
+                          plan=ResearchPlan(queries=["q1", "q2"]),
+                          fetched_count=6, max_pages=12, stop_reason="đủ 5 câu chuyện")
+    items = [SummaryItem(url=f"https://news{i}.com/a", headline=f"Tin số {i}",
+                         summary="Nội dung tóm tắt " * 10, confidence="high",
+                         domain=f"news{i}.com", sources=[f"news{i}.com"],
+                         independent=2)
+             for i in range(5)]
+    report = format_report(state, items, [{"url": "a", "reason": "duplicate"},
+                                          {"url": "b", "reason": "off-topic"}])
+    assert len(report) <= 800
+    assert "Đã lọc:" in report
+    assert "1 trùng lặp" in report
+    assert "Research: tin hot hôm nay" in report
 
 ```
 
@@ -8101,22 +10306,47 @@ HUB_MODEL_CODE_STRONG=
 HUB_DATA_DIR=~/.agent-hub
 # QA limits
 HUB_QA_MAX_READS=2
-HUB_QA_HISTORY_TURNS=3
+# Conversation memory: one char budget shared by verbatim turns + digests
+HUB_QA_HISTORY_CHARS=8000
+HUB_QA_HISTORY_TURNS=12
+HUB_QA_VERBATIM_TURNS=2
+HUB_QA_VERBATIM_CHARS=2500
+HUB_QA_DIGEST_CHARS=320
+# Project index the QA agent builds in memory every question (chars; 500-20000)
+HUB_QA_MINIMAP_CHARS=3000
+# Workspaces the agents may search/edit (semicolon-separated); default: current directory
+HUB_WORKSPACE_ROOTS=
+HUB_PROJECT_SCAN_DEPTH=4
 # Optional fixed context output/input file
 HUB_CONTEXT_FILE=
 # Optional MCP server configuration as JSON; install the [mcp] extra first
 # HUB_MCP_SERVERS={}
 
-# Research Agent (Laya decision model; no Gemini calls inside the research loop)
-HUB_LAYA_MODEL=multilingual
-HUB_LAYA_DEVICE=cpu
-# shadow = observe Laya but execute deterministic safe policy (recommended initially)
-# active = let Laya choose bounded actions; requires local benchmark first
-# off = disable Laya entirely
-HUB_RESEARCH_LAYA_MODE=shadow
-HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
+# Research Agent: LLM lập kế hoạch + tóm tắt (tắt bằng HUB_RESEARCH_LLM=false)
+HUB_RESEARCH_LLM=true
+# Optional preferred model for the research planner/summarizer (falls back to HUB_MODELS)
+HUB_MODEL_RESEARCH=
+# Search backends, comma-separated: ddgs + Google News RSS
+HUB_RESEARCH_SEARCH_BACKENDS=ddgs,rss
+# Planner language and RSS locale (Google News)
+HUB_RESEARCH_LANGUAGE=vi
+HUB_RESEARCH_RSS_HL=vi
+HUB_RESEARCH_RSS_GL=VN
+HUB_RESEARCH_RSS_CEID=VN:vi
+HUB_RESEARCH_MAX_SEARCH_ROUNDS=3
+HUB_RESEARCH_PAGES_PER_ROUND=4
 HUB_RESEARCH_MAX_PAGES=12
 HUB_RESEARCH_RESULTS_PER_QUERY=12
+# digest stops at MIN_ITEMS distinct stories from >=2 domains; verify stops at 2 independent sources
+HUB_RESEARCH_MIN_ITEMS=5
+HUB_RESEARCH_MAX_PER_DOMAIN=2
+HUB_RESEARCH_CONTENT_CHARS=12000
+HUB_RESEARCH_SUMMARY_INPUT_CHARS=12000
+HUB_RESEARCH_SUMMARY_ARTICLE_CHARS=1500
+HUB_RESEARCH_TOP_ITEMS=5
+HUB_RESEARCH_REPORT_CHARS=3500
+HUB_RESEARCH_FETCH_WORKERS=4
+HUB_RESEARCH_DEADLINE_SECONDS=90
 # Optional: render JS-heavy pages with Playwright when HTTP HTML is too thin
 HUB_RESEARCH_BROWSER_FALLBACK=true
 
@@ -8139,7 +10369,7 @@ Agent Hub là nền tảng multi-agent chạy local bằng Python, LangGraph và
 | `qa` | Hỏi đáp, phân tích kiến trúc/source code | Gemini |
 | `search` | Tìm kiếm read-only trong source dự án | Python |
 | `context` | Tạo/cập nhật Project Context | Python |
-| `research` | Search web, fetch, extract, deduplicate, verify và rank bài viết | Laya + Python; không gọi Gemini trong research loop |
+| `research` | LLM lập kế hoạch, search web, fetch/extract, dedup, kiểm chứng chéo, rank và tóm tắt | Gemini (2 request/lần) + Python |
 | `code` | Đọc, sửa và tạo source code trong dự án; xin phê duyệt trước khi ghi file; tự kiểm tra sau khi sửa | Gemini + Python (Python xử lý tối đa) |
 
 ## Architecture
@@ -8151,10 +10381,10 @@ CLI / Telegram Bot
       -> Orchestrator (chỉ phối hợp các agent parallel-safe)
 
 Research Agent
-  -> Research Controller
-  -> Laya Decision Engine (lazy-loaded, multilingual)
-  -> Python tools: Search / Fetch / Extract / Deduplicate / Verify
-  -> Laya experimental scoring + deterministic ranking baseline
+  -> Research Planner (Gemini: query, intent, nguồn ưu tiên)
+  -> Python tools: Search (DDGS + Google News RSS) / Select / Fetch+Extract / Deduplicate / Rank
+  -> Evidence policy (digest ≥5 câu chuyện, verify ≥2 nguồn độc lập)
+  -> Article Summarizer (Gemini: top 5 tin sạch, lọc trùng/giật tít)
   -> Report
 
 Code Agent (LangGraph subgraph)
@@ -8163,7 +10393,7 @@ Code Agent (LangGraph subgraph)
               ^---- repair loop ----|      ^---- next round / ask user ----|
 ```
 
-Research Agent và Code Agent đều là agent độc lập, `parallel_safe=False`. Laya là decision engine bên trong Research Agent, không phải agent ngang hàng. Research Agent không import ModelRouter và không gọi Gemini trong vòng lặp tìm kiếm/thu thập.
+Research Agent và Code Agent đều là agent độc lập, `parallel_safe=False`. Research Agent dùng Gemini đúng 2 lần mỗi lần chạy (lập kế hoạch và tóm tắt); toàn bộ vòng lặp tìm kiếm/chọn/tải/xếp hạng là Python deterministic với ngân sách cứng.
 
 ## Install
 
@@ -8180,13 +10410,13 @@ Các extra (cài thêm khi cần):
 
 | Extra | Dùng cho |
 |---|---|
-| `research` | Research Agent (Laya, ddgs, requests, trafilatura, beautifulsoup4) |
+| `research` | Research Agent (ddgs, requests, trafilatura, beautifulsoup4) |
 | `telegram` | Telegram Bot (`python-telegram-bot`) |
 | `dev` | `pytest` |
 | `tokens` | Đếm token chính xác (`tiktoken`); mặc định ước lượng chars/4 |
 | `mcp` | MCP bridge (`langchain-mcp-adapters`) |
 
-Điền `GOOGLE_API_KEY` trong `.env` nếu dùng QA, Supervisor hoặc Code Agent. Research Agent không cần Gemini API key.
+Điền `GOOGLE_API_KEY` trong `.env` nếu dùng QA, Supervisor hoặc Code Agent. Research Agent dùng Gemini cho planner/summarizer; đặt `HUB_RESEARCH_LLM=false` để chạy hoàn toàn bằng Python mà không cần API key.
 
 Mỗi lần mở terminal mới, kích hoạt lại môi trường trước khi chạy:
 
@@ -8210,7 +10440,7 @@ hub
 
 Các lệnh `/qa`, `/search`, `/context`, `/research`, `/code` gọi agent trực tiếp và bỏ qua Supervisor routing. Câu hỏi không có prefix sẽ được Supervisor định tuyến bằng một model nhỏ; Supervisor có thể không chọn `code` khi bạn muốn sửa code, vì vậy **hãy gọi `/code` trực tiếp**.
 
-Các lệnh khác trong CLI: `/skills`, `/tools`, `/tool <name> <JSON>`, `/history`, `/memory`, `/reset`, `exit`.
+Các lệnh khác trong CLI: `/skills`, `/tools`, `/tool <name> <JSON>`, `/history`, `/memory`, `/remember`, `/reset`, `exit`.
 
 Chạy độc lập Context Agent (không dùng LLM):
 
@@ -8331,51 +10561,38 @@ src/hub/agents/code/
 
 `approval` và `ask` là các node riêng, không gọi LLM: LangGraph chạy lại cả node bị gián đoạn khi resume, nên cách này đảm bảo patch bạn đã duyệt chính là patch được áp dụng.
 
-## Research Agent (Laya)
+## Research Agent
 
-- Search: `ddgs` (DuckDuckGo search).
-- Fetch: `requests`, chỉ HTTP(S), kiểm tra public IP, chặn localhost/private/reserved IP, giới hạn redirect, timeout và 2 MB/trang.
-- Extract: Trafilatura; BeautifulSoup là fallback.
-- Processing: Python dedup URL/title, giữ evidence từ nhiều domain để đo corroboration.
-- Decision: Laya chọn trong tập action hữu hạn `FETCH_NEXT`, `SEARCH_MORE`, `VERIFY_TOP`, `STOP`.
-- Ranking: baseline minh bạch kết hợp freshness, heuristic source quality, corroboration và độ đầy đủ nội dung. Laya ordinal score được lưu riêng và chỉ ảnh hưởng final score ở chế độ `active`.
+Pipeline: **LLM lập kế hoạch → tìm kiếm → chọn URL → tải & trích nội dung → xếp hạng → kiểm tra bằng chứng → LLM tóm tắt/lọc → báo cáo**.
 
-### Laya modes
+- **Planner** (Gemini, đúng 1 request/lần): sinh tối đa 3 query, `intent` (`digest` = tổng hợp tin, `verify` = kiểm chứng), domain ưu tiên và `recency_days`. Domain chỉ để cộng điểm, **không chặn** nguồn khác. LLM tắt/lỗi/hết quota → fallback 3 query tiếng Việt, research vẫn chạy.
+- **Search**: `ddgs` (DuckDuckGo news + text) và **Google News RSS** (`hl=vi&gl=VN`), gộp rồi dedup theo URL và tiêu đề. Một backend lỗi thì backend còn lại vẫn trả kết quả.
+- **Chọn trước khi tải**: chấm relevance + độ mới + uy tín nguồn, tối đa 4 URL/vòng, ≤2 bài/domain, 1 bài/câu chuyện mỗi vòng — tránh dồn ngân sách vào bài rác. Với `verify`, các bản sao cùng câu chuyện được tải ở vòng sau để đối chiếu độc lập.
+- **Fetch**: `requests`, chỉ HTTP(S), chặn localhost/private/reserved IP, giới hạn redirect, timeout và 2 MB/trang. Trafilatura trích nội dung; Playwright là fallback cho trang render JS. Tối đa 12k ký tự/bài.
+- **Ngày đăng thật**: JSON-LD `datePublished` → `article:published_time` → Trafilatura metadata. Thiếu ngày thì bị hạ tín hiệu thay vì tự bịa.
+- **Ranking** (cộng = 1.0): relevance 40%, độ mới 25%, uy tín nguồn 20%, xác nhận chéo 10%, độ đầy đủ 5%. Câu hỏi toàn stopword tự chuyển sang trọng số mới/uy tín.
+- **Điều kiện dừng** theo intent:
+  - `digest`: ≥5 câu chuyện khác nhau từ ≥2 domain.
+  - `verify`: câu chuyện trọng tâm có ≥2 **nguồn độc lập** (fingerprint nội dung; bản syndication không được tính là nguồn thứ hai).
+- **Summarizer** (Gemini, đúng 1 request/lần): chọn top 5 tin sạch, 2–3 câu/tin, nêu số liệu nếu có, loại trùng/giật tít/PR/ngoài chủ đề. LLM lỗi → fallback trích **2 câu hoàn chỉnh**, không cắt giữa câu.
+- **Report**: ≤3500 ký tự, mỗi tin có domain, thời gian, xác nhận chéo, URL và dòng "Đã lọc: …".
 
-`HUB_RESEARCH_LAYA_MODE=shadow` là mặc định. Laya được gọi để dự đoán action và chấm điểm, nhưng Python policy vẫn quyết định thao tác thật và ranking vẫn dùng baseline. Đây là chế độ nên dùng để benchmark.
-
-- `shadow`: chạy song song để so sánh, không để Laya điều khiển thực tế.
-- `active`: cho Laya chọn action và kết hợp điểm Laya vào ranking; chỉ bật sau benchmark held-out.
-- `off`: không load Laya; dùng Python policy và ranking baseline.
-
-Cấu hình trong `.env`:
+Chi phí: đúng **2 request Gemini/lần research**. Đặt `HUB_RESEARCH_LLM=false` để chạy thuần Python (0 request), vẫn có relevance, evidence và báo cáo sạch.
 
 ```env
-HUB_LAYA_MODEL=multilingual
-HUB_LAYA_DEVICE=cpu
-HUB_RESEARCH_LAYA_MODE=shadow
-HUB_RESEARCH_MAX_SEARCH_ROUNDS=2
+HUB_RESEARCH_LLM=true
+HUB_MODEL_RESEARCH=
+HUB_RESEARCH_SEARCH_BACKENDS=ddgs,rss
+HUB_RESEARCH_MAX_SEARCH_ROUNDS=3
+HUB_RESEARCH_PAGES_PER_ROUND=4
 HUB_RESEARCH_MAX_PAGES=12
 HUB_RESEARCH_RESULTS_PER_QUERY=12
+HUB_RESEARCH_MIN_ITEMS=5
+HUB_RESEARCH_MAX_PER_DOMAIN=2
+HUB_RESEARCH_DEADLINE_SECONDS=90
 ```
 
-Laya được load lazy và tái sử dụng trong process. Để tránh Gemini token, research loop không gọi QA, Gemini hoặc Supervisor ở từng trang. Chỉ một lần routing ở Supervisor có thể phát sinh Gemini khi người dùng không gọi trực tiếp `/research`.
-
-### Important model limitation
-
-Model card hiện công bố checkpoint base multilingual đạt 0.342 trên benchmark typed-decisions, thấp hơn majority baseline 0.461 của benchmark đó. Đây không phải benchmark research tiếng Việt, nhưng đủ để không tin zero-shot decisions ngay. Vì vậy chế độ `shadow` là mặc định; không coi confidence là bảo đảm đúng.
-
-Điểm hiện tại **không phải điểm viral/trending**: pipeline chưa lấy view/share/engagement từ nền tảng mạng xã hội. Nó xếp hạng theo độ mới, tín hiệu uy tín nguồn, sự xác nhận từ domain khác và độ đầy đủ nội dung. Ngày đăng thiếu sẽ bị giảm tín hiệu thay vì tự bịa ngày.
-
-### Benchmark Laya
-
-Tạo JSONL theo schema trong `benchmarks/README.md`, sau đó chạy:
-
-```powershell
-python scripts/benchmark_laya_research.py benchmarks/my_labels.jsonl
-```
-
-Chỉ chuyển `active` khi Laya vượt baseline trên tập held-out, có kết quả theo từng loại action và ranking được kiểm tra bằng nhãn người dùng.
+`benchmarks/README.md` mô tả cách tạo bộ nhãn tay để đánh giá chất lượng báo cáo (độ liên quan, trùng lặp, độ phủ nguồn).
 
 ## QA / Search / Code: chọn project
 
@@ -8388,8 +10605,10 @@ HUB_PROJECT_SCAN_DEPTH=4
 ```
 
 - Khi người dùng nêu đường dẫn hoặc tên project, Agent Hub ưu tiên lựa chọn đó. Nếu có nhiều kết quả, agent hỏi chọn; nếu không tìm thấy, agent hỏi đường dẫn.
-- Project đã chọn được giữ trong thread. QA đọc `PROJECT_CONTEXT*.md` trong thư mục gốc nếu có; nếu không có, QA vẫn đọc source code trực tiếp. Source code luôn được ưu tiên khi khác với context.
-- Context Agent và lệnh `repo-context <project-path>` lưu `PROJECT_CONTEXT_<mode>.md` ngay trong thư mục project. Không dùng `HUB_CONTEXT_FILE` làm context toàn cục.
+- Project đã chọn được giữ trong thread. Mỗi câu hỏi, QA dựng **chỉ mục dự án** ngay trong RAM (cây thư mục + entry points + số file, tối đa `HUB_QA_MINIMAP_CHARS` ký tự, mặc định 3000) rồi tự đọc thêm file/hàm cụ thể khi thiếu thông tin. QA **không** tự đọc `PROJECT_CONTEXT*.md`; file đó giờ chỉ dùng khi bạn chỉ định rõ đường dẫn trong câu hỏi hoặc để người đọc/chia sẻ.
+- **Bộ nhớ hội thoại của QA** dùng một ngân sách chung `HUB_QA_HISTORY_CHARS` (mặc định 8000 ký tự): 2 lượt gần nhất giữ nguyên văn (`HUB_QA_VERBATIM_TURNS`, mỗi câu trả lời tối đa `HUB_QA_VERBATIM_CHARS`), các lượt cũ hơn được rút gọn thành trích yếu có nhãn `[qa]`/`[code]`/`[context]`, tối đa `HUB_QA_DIGEST_CHARS` mỗi lượt và `HUB_QA_HISTORY_TURNS` lượt. Nhờ vậy QA hiểu "cái đó / file kia / làm tiếp" mà không gửi lại toàn bộ hội thoại.
+- Thông tin phải sống qua nhiều phiên nên nằm trong memory, không nằm trong history: `/remember <ghi chú>` ghi vào `.hub/project_memory.md` của project đang làm việc (QA đọc mỗi lượt, tối đa 8000 ký tự), còn `/memory add <ghi chú>` ghi vào `~/.agent-hub/user_memory.md` cho mọi project. Project đang làm việc cũng được lưu theo thread trong SQLite nên mở lại CLI không phải chọn lại.
+- Context Agent và lệnh `repo-context <project-path>` lưu `PROJECT_CONTEXT_<mode>.md` ngay trong thư mục project (QA không tự nạp). Không dùng `HUB_CONTEXT_FILE` làm context toàn cục.
 
 ## Other components
 
@@ -8408,16 +10627,36 @@ conda activate agent-hub
 pytest -q
 ```
 
-Test không cần tải model Laya, không gọi Internet và không gọi Gemini (dùng mock/fake); `tests/conftest.py` cô lập test khỏi `.env` thật của bạn (ví dụ `HUB_WORKSPACE_ROOTS`, `HUB_DATA_DIR`). MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.
+Test không cần Internet, không cần Gemini và không cần model local (dùng fake); `tests/conftest.py` cô lập test khỏi `.env` thật của bạn (ví dụ `HUB_WORKSPACE_ROOTS`, `HUB_DATA_DIR`). MCP cần kiểm thử riêng với server thật. Không commit `.env`, API keys hoặc dữ liệu memory cá nhân.
 ```
 
 ### benchmarks/README.md  [CONFIG]
 ```markdown
-# Laya research benchmark data
+# Research report benchmark data
 
-Create a JSONL file with human-labelled examples. Keep a held-out test split; do not tune prompts on it.
+Create a JSONL file with human-labelled examples to evaluate **report quality**,
+not model decisions. Keep a held-out split; do not tune prompts on it.
 
-Action row:
+Each line describes one question and what a good answer must contain:
+
+```json
+{"query": "tin hot hôm nay", "must_cover": ["sự kiện A", "sự kiện B"], "banned": ["PR", "giật tít"], "min_sources": 3, "max_duplicates": 0}
+```
+
+Columns:
+
+- `query`: the exact user question.
+- `must_cover`: facts/stories a good report should mention (checked by a human or an LLM judge).
+- `banned`: content that must not appear (ads, clickbait, off-topic items).
+- `min_sources`: minimum number of distinct domains the report should cite.
+- `max_duplicates`: how many repeated stories are tolerated (0 = all duplicates filtered).
+
+Scoring suggestions:
+
+- **Relevance**: fraction of `must_cover` present.
+- **Junk filter**: any `banned` item present fails the row.
+- **Coverage**: number of distinct domains ≥ `min_sources`.
+- **Duplication**: repeated stories ≤ `max_duplicates`.
 ```
 
 ### pyproject.toml  [CONFIG]
@@ -8439,7 +10678,7 @@ dependencies = [
 tokens = ["tiktoken"]   # exact token counts; otherwise chars/4 estimate
 dev = ["pytest"]
 mcp = ["langchain-mcp-adapters"]
-research = ["laya>=0.3.20", "ddgs>=9.0", "requests>=2.31", "trafilatura>=2.0", "beautifulsoup4>=4.12"]
+research = ["ddgs>=9.0", "requests>=2.31", "trafilatura>=2.0", "beautifulsoup4>=4.12"]
 research-browser = ["playwright>=1.45"]  # Optional JS-rendered page fallback
 telegram = ["python-telegram-bot>=21,<23"]
 

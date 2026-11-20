@@ -11,6 +11,7 @@ import re
 import shutil
 import sys
 import textwrap
+from pathlib import Path
 from .config import MODEL_POOL
 from .graph import build_hub
 from .model_router import TRACKER
@@ -180,7 +181,7 @@ def help_text() -> str:
     lines = ['Chọn agent thẳng (không tốn request điều phối):']
     for a in AGENTS:
         lines.append(f"  /{a.name} <nội dung>   {a.description.split(':')[0]}")
-    lines += ['Không có prefix -> LLM tự chọn agent (tốn 1 request nhỏ).', 'Lệnh: /models · /agents · /skills · /tools · /tool <name> <JSON> · /history · /memory · /reset · /help · exit']
+    lines += ['Không có prefix -> LLM tự chọn agent (tốn 1 request nhỏ).', 'Lệnh: /models · /agents · /skills · /tools · /tool <name> <JSON> · /history · /memory · /remember · /reset · /help · exit']
     return '\n'.join(lines)
 
 
@@ -204,6 +205,14 @@ def _print_turn_notes():
             f"  ↳ Điều phối: {' → '.join(TRACKER.route_models)} (gõ /qa hoặc /context để bỏ bước này)",
             "dim", color,
         ))
+
+
+def _current_project(app, config: dict) -> str | None:
+    """Project the graph is working on right now (None before the first project-aware turn)."""
+    try:
+        return app.get_state(config).values.get("active_project_root")
+    except Exception:
+        return None
 
 
 def _restore_messages(store: MemoryStore, thread_id: str):
@@ -304,9 +313,21 @@ def main():
             if text.lower().startswith("/memory add "):
                 note = text[len("/memory add "):].strip()
                 store.append_user_memory(note)
-                print("Đã lưu ghi chú vào user memory.")
+                print("Đã lưu ghi chú vào user memory (mọi project).")
             else:
                 print(store.read_user_memory() or "User memory đang trống. Dùng /memory add <ghi chú> để lưu thủ công.")
+            continue
+        if cmd == "/remember":
+            note = text[len("/remember"):].strip()
+            if not note:
+                print("Cách dùng: /remember <ghi chú> — lưu vào .hub/project_memory.md của project đang làm việc.")
+                continue
+            root = _current_project(app, config) or store.get_active_project(thread_id)
+            if not root or not Path(root).is_dir():
+                print("Chưa có project đang làm việc. Hỏi /qa hoặc /code một câu trước rồi dùng lại /remember.")
+                continue
+            path = MemoryStore.append_project_memory(root, note)
+            print(f"Đã lưu vào {path}")
             continue
         if cmd == "/reset":
             thread_id = _new_thread_id(store)
@@ -325,7 +346,11 @@ def main():
         try:
             if restore_pending:
                 history = _restore_messages(store, thread_id)
-                result = app.invoke({"messages": history + [HumanMessage(body)], "forced": forced}, config)
+                seed = {"messages": history + [HumanMessage(body)], "forced": forced}
+                saved_root = store.get_active_project(thread_id)
+                if saved_root and Path(saved_root).is_dir():
+                    seed["active_project_root"] = saved_root
+                result = app.invoke(seed, config)
                 while "__interrupt__" in result:
                     print(_paint("\nCẦN BẠN CHỌN", "yellow", _color_enabled(), bold=True))
                     print(str(result["__interrupt__"][0].value))
@@ -350,6 +375,9 @@ def main():
         model_label = " → ".join(TRACKER.turn_models) or None
         print_agent_reply(label, reply, model=model_label)
         store.save_turn(thread_id, body, reply, agent or forced)
+        project_root = _current_project(app, config)
+        if project_root:
+            store.set_active_project(thread_id, project_root)
 
 
 if __name__ == "__main__":

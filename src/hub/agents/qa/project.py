@@ -225,7 +225,11 @@ def resolve_project_root(state: dict, question: str, *, allow_interrupt: bool = 
 
 
 def load_project_context(project_root: str | Path) -> tuple[str | None, Path | None]:
-    """Load the newest context file directly inside the selected project root only."""
+    """Load the newest context file directly inside the selected project root only.
+
+    No longer called automatically by QA (which builds an on-the-fly index instead).
+    Kept for callers that deliberately want a PROJECT_CONTEXT*.md file.
+    """
     root = Path(project_root).resolve()
     try:
         files = sorted(

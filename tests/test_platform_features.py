@@ -26,6 +26,25 @@ def test_user_memory_is_explicit(tmp_path, monkeypatch):
     assert "Prefer concise answers" in store.read_user_memory()
 
 
+def test_active_project_is_remembered_per_thread(tmp_path):
+    db = tmp_path / "hub.sqlite3"
+    store = MemoryStore(db)
+    store.set_active_project("thread-a", tmp_path)
+    assert MemoryStore(db).get_active_project("thread-a") == str(tmp_path)
+    assert MemoryStore(db).get_active_project("thread-b") is None
+    store.set_active_project("thread-a", None)
+    assert store.get_active_project("thread-a") is None
+
+
+def test_project_memory_lands_where_qa_reads_it(tmp_path):
+    path = MemoryStore.append_project_memory(tmp_path, "QA dùng mini-map")
+    assert path == tmp_path / ".hub" / "project_memory.md"
+    assert MemoryStore.read_project_memory(tmp_path).strip() == "- QA dùng mini-map"
+    MemoryStore.append_project_memory(tmp_path, "chạy pytest -q trong env agent-hub")
+    text = MemoryStore.read_project_memory(tmp_path)
+    assert "mini-map" in text and "pytest -q" in text
+
+
 def test_skill_registry_loads_and_selects(tmp_path):
     skill = tmp_path / "skills" / "python-debug" / "SKILL.md"
     skill.parent.mkdir(parents=True)

@@ -4,8 +4,8 @@ from .node import research_node
 SPEC = AgentSpec(
     name="research",
     description=(
-        "Research Web Agent: tìm kiếm, thu thập, lọc trùng, kiểm chứng và xếp hạng "
-        "thông tin từ nhiều website; dùng Laya làm decision model, không dùng Gemini trong research loop."
+        "Research Web Agent: LLM lập kế hoạch tìm kiếm, thu thập và trích nội dung từ "
+        "nhiều website, lọc trùng, kiểm chứng chéo nguồn, xếp hạng và tóm tắt top tin sạch."
     ),
     node=research_node,
     parallel_safe=False,

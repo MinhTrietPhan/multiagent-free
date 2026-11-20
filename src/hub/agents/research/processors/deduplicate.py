@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
+
+# Minimum body length before a content fingerprint is trusted as a duplicate signal.
+FINGERPRINT_MIN_CHARS = 500
+FINGERPRINT_CHARS = 300
 
 
 def canonical_url(url: str) -> str:
@@ -17,6 +22,42 @@ def canonical_url(url: str) -> str:
 def title_key(title: str) -> set[str]:
     """Normalised token set of a title, used for same-story similarity."""
     return set(re.findall(r"[\w]+", (title or "").casefold()))
+
+
+def same_story(title: str, other: str, threshold: float = 0.45) -> bool:
+    """True when two headlines describe the same story (token overlap, not exact match)."""
+    left, right = title_key(title), title_key(other)
+    union = left | right
+    return bool(union) and len(left & right) / len(union) >= threshold
+
+
+def content_fingerprint(text: str) -> str | None:
+    """Hash the opening of an article body to spot syndicated copies.
+
+    Only used for bodies long enough to be distinctive; short snippets and
+    pages that failed extraction return ``None`` (caller falls back to domain).
+    """
+    if not text or len(text.strip()) < FINGERPRINT_MIN_CHARS:
+        return None
+    body = re.sub(r"[^\w\s]", "", " ".join(text.split()).casefold())
+    if len(body) < FINGERPRINT_MIN_CHARS:
+        return None
+    return hashlib.sha1(body[:FINGERPRINT_CHARS].encode("utf-8")).hexdigest()[:16]
+
+
+def independent_source_count(articles: list) -> int:
+    """Count distinct original sources: one per unique fingerprint, otherwise one per domain."""
+    keys: set[str] = set()
+    for article in articles:
+        if not getattr(article, "content", "").strip():
+            continue
+        fingerprint = getattr(article, "fingerprint", None)
+        keys.add(f"fp:{fingerprint}" if fingerprint else f"host:{getattr(article, 'source', '')}")
+    return len(keys)
+
+
+def independent_domains(articles: list) -> set[str]:
+    return {getattr(article, "source", "") for article in articles if getattr(article, "source", "")}
 
 
 def _host(url: str) -> str:
@@ -64,4 +105,3 @@ def deduplicate(rows: list[dict]) -> list[dict]:
         accepted.append((host, path, tokens))
         output.append({**row, "url": url})
     return output
-

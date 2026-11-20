@@ -2,12 +2,12 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage, HumanMessage
-from hub.agents.qa.node import qa_node, _history, _load_context_with_path
+from hub.agents.qa.node import _history, qa_node
 import time, os
 
 def mk(tmp, root_text=None):
-    ctx = f'# Project context: P\n> Root: `{root_text or tmp}`\n## Files\n'
-    (tmp / 'PROJECT_CONTEXT_map.md').write_text(ctx, encoding='utf-8')
+    """Minimal project marker; QA builds its own index, no context file needed."""
+    (tmp / 'pyproject.toml').write_text("[project]\nname='demo'\n", encoding='utf-8')
 
 def llm_with(*contents):
     m = MagicMock(); m.invoke.side_effect = [MagicMock(content=c) for c in contents]; return m
@@ -22,12 +22,13 @@ def test_history_used_and_footer_stripped(tmp_path, monkeypatch):
     with patch('hub.agents.qa.node.get_llm', return_value=llm):
         out = qa_node(state)
     sent = llm.invoke.call_args[0][0]
-    texts = [m.content for m in sent]
-    assert any('hàm train là gì?' in t for t in texts)
-    assert any(t == 'Là `train()` ở model.py' for t in texts)          # footer đã bị bỏ
-    assert not any('Đã tạo file' in t for t in texts)                    # agent khác không lẫn vào
-    assert texts[-1] == 'Câu hỏi: còn hàm kia?'
-    assert out['messages'][0].name == 'qa' and 'PROJECT_CONTEXT_map.md' in out['messages'][0].content
+    blob = '\n'.join(m.content for m in sent)
+    assert 'hàm train là gì?' in blob                      # lượt cũ được nhớ
+    assert 'Là `train()` ở model.py' in blob               # footer đã bị bỏ
+    assert '📄 Nguồn' not in blob
+    assert '[hub] Đã tạo file' in blob                     # lượt của agent khác cũng vào history, có nhãn
+    assert sent[-1].content == 'Câu hỏi: còn hàm kia?'
+    assert out['messages'][0].name == 'qa' and '🗂️' in out['messages'][0].content
 
 def test_history_limit(tmp_path):
     msgs = []
@@ -35,13 +36,21 @@ def test_history_limit(tmp_path):
         msgs += [HumanMessage(f'q{i}'), AIMessage(f'a{i}', name='qa')]
     msgs.append(HumanMessage('now'))
     h = _history({'messages': msgs}, max_turns=2)
-    assert [m.content for m in h] == ['Câu hỏi: q4', 'a4', 'Câu hỏi: q5', 'a5']
+    text = '\n'.join(m.content for m in h)
+    assert 'q4' in text and 'q5' in text
+    assert 'q3' not in text                                 # ngoài cửa sổ
+    assert '4 lượt cũ hơn đã lược bớt' in text
 
-def test_newest_context_file_wins(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / 'PROJECT_CONTEXT.md').write_text('old'); time.sleep(0.05)
-    (tmp_path / 'PROJECT_CONTEXT_full.md').write_text('new')
-    assert _load_context_with_path(tmp_path)[1].name == 'PROJECT_CONTEXT_full.md'
+def test_project_context_files_are_not_auto_loaded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); mk(tmp_path)
+    (tmp_path / 'PROJECT_CONTEXT_full.md').write_text('STALE_MARKER_42', encoding='utf-8')
+    (tmp_path / 'app.py').write_text('VALUE = 1\n', encoding='utf-8')
+    llm = llm_with('ok')
+    with patch('hub.agents.qa.node.get_llm', return_value=llm):
+        qa_node({'messages': [HumanMessage('hỏi')]})
+    sent = '\n'.join(m.content for m in llm.invoke.call_args[0][0])
+    assert 'STALE_MARKER_42' not in sent
+    assert 'app.py' in sent
 
 def test_read_range_and_js_function(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path); mk(tmp_path)
@@ -97,19 +106,16 @@ def test_no_context_still_uses_source(tmp_path, monkeypatch):
     with patch('hub.agents.qa.node.get_llm', return_value=llm):
         out = qa_node({'messages': [HumanMessage('giá trị VALUE là gì?')]})
     assert out['messages'][0].content.startswith('đã đọc source')
-    assert 'Không có PROJECT_CONTEXT' in out['messages'][0].content
+    assert '🗂️' in out['messages'][0].content
+    assert 'Không có PROJECT_CONTEXT' not in out['messages'][0].content
 
 
-def test_initial_context_omits_full_source_but_keeps_file_index():
-    from hub.agents.qa.node import _compact_project_context
+def test_initial_index_keeps_only_navigation_data(tmp_path, monkeypatch):
+    """The prompt carries the index, never full code bodies."""
+    from hub.mini_map import build_mini_map
 
-    context = (
-        "# Project context\n## 1. Overview\nimportant overview\n"
-        "### src/main.py  [FULL]\n```python\nSECRET_FULL_BODY = 123\n```\n"
-        "### src/model.py  [SKELETON]\n```text\ndef predict()  # L10\n```\n"
-    )
-    compact = _compact_project_context(context, max_chars=10000)
-    assert "important overview" in compact
-    assert "src/main.py" in compact and "src/model.py" in compact
-    assert "SECRET_FULL_BODY" not in compact
-    assert "retrieve this file" in compact
+    (tmp_path / 'pyproject.toml').write_text("[project]\nname='demo'\n", encoding='utf-8')
+    (tmp_path / 'main.py').write_text('SECRET_FULL_BODY = 123\n', encoding='utf-8')
+    text = build_mini_map(tmp_path)
+    assert 'main.py' in text
+    assert 'SECRET_FULL_BODY' not in text

@@ -1,62 +1,12 @@
-from unittest.mock import Mock
-
-from hub.agents.research.controller.decision_engine import LayaDecisionEngine
-from hub.agents.research.controller.policy import choose_action
-from hub.agents.research.controller.pipeline import ResearchPipeline
-from hub.agents.research.processors.deduplicate import deduplicate
+from hub.agents.research.processors.deduplicate import (
+    content_fingerprint,
+    deduplicate,
+    independent_source_count,
+    same_story,
+)
 from hub.agents.research.ranking.engine import rank_articles
-from hub.agents.research.state import Article, ResearchState
+from hub.agents.research.state import Article
 from hub.agents.research.collectors.fetch import validate_public_url
-
-
-def test_laya_adapter_uses_typed_choice_without_gemini():
-    router = Mock()
-    router.predict.return_value = {
-        "answers": {"next_action": {"choice": "FETCH_NEXT", "confidence": 0.81}}
-    }
-    engine = LayaDecisionEngine(router=router)
-    action, confidence = engine.choose_action({"query": "AI news"})
-    assert action == "FETCH_NEXT"
-    assert confidence == 0.81
-    router.predict.assert_called_once()
-
-
-def test_laya_scores_multiple_articles_in_one_predict_call():
-    router = Mock()
-    router.predict.return_value = {
-        "answers": {
-            "article_0": {"score": 4.0},
-            "article_1": {"score": 2.0},
-        }
-    }
-    engine = LayaDecisionEngine(router=router)
-    scores = engine.score_articles([
-        {"url": "https://a.test", "title": "A"},
-        {"url": "https://b.test", "title": "B"},
-    ])
-    assert scores == {"https://a.test": 100.0, "https://b.test": 50.0}
-    router.predict.assert_called_once()
-
-
-def test_shadow_policy_logs_laya_but_uses_safe_python_policy():
-    state = ResearchState(query="AI", pending_urls=[{"url": "https://example.com"}], max_pages=2)
-    engine = Mock()
-    engine._unavailable = False
-    engine.choose_action.return_value = ("STOP", 0.99)
-    action, prediction = choose_action(state, engine, mode="shadow")
-    assert action == "FETCH_NEXT"
-    assert prediction == "STOP"
-    assert state.actions
-
-
-def test_active_policy_cannot_fetch_when_budget_exhausted():
-    state = ResearchState(query="AI", pending_urls=[{"url": "https://example.com"}],
-                          fetched_count=1, max_pages=1)
-    engine = Mock()
-    engine._unavailable = False
-    engine.choose_action.return_value = ("FETCH_NEXT", 0.99)
-    action, _ = choose_action(state, engine, mode="active")
-    assert action == "STOP"
 
 
 def test_deduplicate_removes_tracking_and_near_duplicate_titles():
@@ -82,6 +32,15 @@ def test_ranking_is_deterministic_and_exposes_heuristic_score():
     assert all(0 <= item.final_score <= 100 for item in ranked)
 
 
+def test_relevance_beats_a_fresher_off_topic_article():
+    on_topic = Article(url="https://reuters.com/a", title="OpenAI releases new model",
+                       published_at="2026-11-18T10:00:00+00:00", content="model " * 400)
+    off_topic = Article(url="https://example.com/b", title="Local football results",
+                        published_at="2026-11-19T09:00:00+00:00", content="football " * 400)
+    ranked = rank_articles([on_topic, off_topic], terms=["openai", "model"])
+    assert ranked[0].url == "https://reuters.com/a"
+
+
 def test_localhost_fetch_is_blocked_before_dns():
     try:
         validate_public_url("http://localhost/admin")
@@ -91,35 +50,15 @@ def test_localhost_fetch_is_blocked_before_dns():
         raise AssertionError("localhost must be blocked")
 
 
-class FakeSearcher:
-    def __init__(self):
-        self.calls = 0
-
-    def search(self, query):
-        self.calls += 1
-        if self.calls == 1:
-            return [
-                {"url": "https://reuters.com/a", "title": "AI company releases new model", "snippet": "Launch"},
-                {"url": "https://bbc.com/b", "title": "AI company releases new model", "snippet": "Details"},
-                {"url": "https://example.org/c", "title": "A different technology story", "snippet": "News"},
-            ]
-        return []
-
-
-def test_pipeline_runs_without_laya_or_gemini(monkeypatch):
-    monkeypatch.setenv("HUB_RESEARCH_LAYA_MODE", "off")
-    searcher = FakeSearcher()
-    pipeline = ResearchPipeline(searcher=searcher,
-                                fetcher=lambda url: ("article body " * 100, url))
-    pipeline.max_rounds = 1
-    pipeline.max_pages = 2
-    state, ranked = pipeline.run("AI news today")
-    assert state.fetched_count == 2
-    assert len(ranked) == 2
-    assert searcher.calls == 1
-    assert all(item.final_score >= 0 for item in ranked)
-    assert any("bbc.com" in item.corroborating_sources for item in ranked)
-
+def test_same_story_and_fingerprint_helpers():
+    assert same_story("OpenAI announces new model", "OpenAI announces a new model")
+    left = Article(url="https://a.com/x", title="T", content="ban tin " * 200)
+    right = Article(url="https://b.com/x", title="T", content="ban tin " * 200)
+    left.fingerprint = content_fingerprint(left.content)
+    right.fingerprint = content_fingerprint(right.content)
+    assert left.fingerprint and left.fingerprint == right.fingerprint
+    # A syndicated copy must not count as a second independent source.
+    assert independent_source_count([left, right]) == 1
 
 
 def test_fetch_retries_rate_limit_then_succeeds(monkeypatch):
@@ -228,6 +167,17 @@ def test_fetch_article_uses_browser_for_thin_js_page(monkeypatch):
     text, final_url = fetch_module.fetch_article("https://example.com")
     assert len(text) >= 200
     assert final_url.endswith("/article")
+
+
+def test_extract_published_prefers_json_ld_then_meta():
+    from hub.agents.research.collectors.fetch import extract_published
+
+    json_ld = ('<script type="application/ld+json">'
+               '{"@type":"NewsArticle","datePublished":"2026-11-19T08:30:00Z"}'
+               '</script>')
+    assert extract_published(json_ld).startswith("2026-11-19T08:30:00")
+    meta = '<meta property="article:published_time" content="2026-11-18T10:00:00+00:00">'
+    assert extract_published(meta).startswith("2026-11-18T10:00:00")
 
 
 def test_extract_text_rejects_captcha_or_cloudflare_challenge():
